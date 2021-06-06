@@ -1,0 +1,12 @@
+{
+  "name": "popeye",
+  "version": "0.0.1",
+  "dependencies": {
+    "3d-core-raub": "^3.6.0",
+    "glfw-raub": "^4.6.0",
+    "webgl-raub": "^2.2.4"
+  },
+  "devDependencies": {
+    "eslint": "^7.27.0"
+  }
+}
