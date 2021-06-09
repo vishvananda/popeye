@@ -61,11 +61,57 @@ class Nes6502 {
         // store the value at X into address
         this.write(addr, this.X);
         break;
+        case 0xac: // LDY
+        // store the next value into Y
+        this.Y = this.read(this.PC);
+        this.PC++;
+        break;
+        case 0xa9: // LDA
+        // store the next value into A
+        this.A = this.read(this.PC);
+        this.PC++;
+        break;
+        case 0x18: // CLC
+        // Not sure what CLC does?
+        this.PC++;
+        break;
+        //note : does "LOOP" need a case here? 
+        case 0xa9: // ADC
+        // Add to accumulator with a Carry
+        this.A++ // How does carry work just having a read statement below?
+        this.A = this.read(this.A);
+        this.PC++;
+        break;
+        case 0x88: // DEY
+        // What is DEY? Delete (reset) Y?
+        this.Y = 0
+        this.PC++;
+        break;
+        case 0xd0: // BNE (loop)
+        // Branch n bytes if Z flag = 0 according to laboseur.com PDF but not sure what this means
+        this.Y = 0x00
+        this.PC++;
+        break;
+        case 0x8e: // STA
+        // read the address
+        var lo = this.read(this.PC);
+        this.PC++;
+        var hi = this.read(this.PC);
+        this.PC++;
+        var addr = (hi << 8) | lo;
+        // store the value at A into address
+        this.write(addr, this.A);
+        break;
+        case 0x88: // NOP
+        // No operation, (EA) -- so no PC++ , or PC++ and nothing else?
+        // this.PC++;
+        break;
       default:
         console.log("unknown instruction");
         break;
     }
   }
+
 
   clock() {
     let ins = this.read(this.PC);
