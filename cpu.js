@@ -72,27 +72,46 @@ class Nes6502 {
         this.PC++;
         break;
         case 0x18: // CLC
-        // Not sure what CLC does?
+        // Clear Carry flag, set to 0
+        St.CARRY = 0
         this.PC++;
         break;
         //note : does "LOOP" need a case here? 
         case 0xa9: // ADC
         // Add to accumulator with a Carry
-        this.A++ // How does carry work just having a read statement below?
-        this.A = this.read(this.A);
+        // This instruction adds the contents of a memory location to the accumulator together with the carry bit. If overflow occurs the carry bit is set, this enables multiple byte addition to be performed.
+
+        let aLimit = 100 // I don't know at what number means overflow occurs
+        let combinedBits = this.read(this.A) + St.CARRY;
+        if (combinedBits > aLimit){
+           this.A = aLimit;
+           St.CARRY = combinedBits - aLimit;
+        }
+        else {
+          this.A = combinedBits;
+        }
+        // additional instructions for ADC:
+        // Zero Flag	Set if A = 0
+        // Overflow Flag	Set if sign bit is incorrect
+        // Negative Flag	Set if bit 7 set
         this.PC++;
         break;
         case 0x88: // DEY
-        // What is DEY? Delete (reset) Y?
-        this.Y = 0
+        // Subtracts one from the Y register setting the zero and negative flags as appropriate.
+        this.Y--;
+        if (Y === 0){
+          //set zero flag if Y is zero
+        }
+        //additional instruction:
+        // Negative FlagSet if bit 7 of Y is set
         this.PC++;
         break;
         case 0xd0: // BNE (loop)
-        // Branch n bytes if Z flag = 0 according to laboseur.com PDF but not sure what this means
-        this.Y = 0x00
+        // If the zero flag is clear then add the relative displacement to the program counter to cause a branch to a new location. Unsure how to do this
+        // this.Y = 0x00
         this.PC++;
         break;
-        case 0x8e: // STA
+        case 0x8d: // STA
         // read the address
         var lo = this.read(this.PC);
         this.PC++;
