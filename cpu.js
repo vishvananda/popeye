@@ -122,8 +122,8 @@ class Nes6502 {
         this.write(addr, this.A);
         break;
         case 0x88: // NOP
-        // No operation, (EA) -- so no PC++ , or PC++ and nothing else?
-        // this.PC++;
+        // No operation PC++ and nothing else
+        this.PC++;
         break;
       default:
         console.log("unknown instruction");
