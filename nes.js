@@ -58,11 +58,14 @@ function dump() {
       "PC: " +
       toHex16(cpu.PC) +
       "\t" +
-      "Stack: " +
+      "Stk: " +
       toHex8(cpu.Stack) +
       "\t" +
-      "Status: " +
-      toHex8(cpu.Status)
+      "Sts: " +
+      toHex8(cpu.Status) +
+      "\t" +
+      "Ins: " +
+      toHex8(cpu.read(cpu.PC))
   );
   const buf = Buffer.from(bus.ram);
   const length = 3 * 16;
