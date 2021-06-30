@@ -61,7 +61,7 @@ class Nes6502 {
       0x9a: [this.tx, "X", "Stack"], //TXS
       0x98: [this.tx, "Y", "A"], //TAY
       // jmp
-      
+
       //push
 
       //pull
@@ -210,20 +210,21 @@ class Nes6502 {
     return cycles;
   }
 
-  tx(source, destination){
-    this[destination] = this[source]
-    if (this[destination] === 0 && destination !== "Stack") { //TXS is only one that says not to set flags.
-      this.setStatus(St.ZERO); 
+  tx(source, destination) {
+    this[destination] = this[source];
+    if (destination != "Stack") {
+      //TXS is only one that says not to set flags.
+      if (this[destination] === 0) {
+        this.setStatus(St.ZERO);
+      } else {
+        this.clearStatus(St.ZERO);
+      }
+      if (this[destination] & 0x80) {
+        this.setStatus(St.NEG);
+      } else {
+        this.clearStatus(St.NEG);
+      }
     }
-    // !does this need to have an "else" clearStatus on the flags?
-    
-    // Negative FlagSet if bit 7 of Y is set
-    if (this[destination] & 0x80 && destination !== "Stack") { //TXS is only one that says not to set flags.
-      this.setStatus(St.NEG);
-    } 
-    // else {
-    //   this.clearStatus(St.NEG);
-    // }
     return 2;
   }
   branch(flag, invert) {
