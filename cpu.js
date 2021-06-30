@@ -54,8 +54,17 @@ class Nes6502 {
       0x91: [this.store, Mode.IND, "A", "Y", 6],
 
       // tx
-
+      0xaa: [this.tx, "A", "X"], //TAX
+      0xa8: [this.tx, "A", "Y"], //TAY
+      0xba: [this.tx, "Stack", "X"], //TSX
+      0x8a: [this.tx, "X", "A"], //TXA
+      0x9a: [this.tx, "X", "Stack"], //TXS
+      0x98: [this.tx, "Y", "A"], //TAY
       // jmp
+      
+      //push
+
+      //pull
 
       // branch
       0x90: [this.branch, St.CARRY, true], // bcc
@@ -201,8 +210,24 @@ class Nes6502 {
     return cycles;
   }
 
+  tx(source, destination){
+    this[destination] = this[source]
+    if (this[destination] === 0 && destination !== "Stack") { //TXS is only one that says not to set flags.
+      this.setStatus(St.ZERO); 
+    }
+    // !does this need to have an "else" clearStatus on the flags?
+    
+    // Negative FlagSet if bit 7 of Y is set
+    if (this[destination] & 0x80 && destination !== "Stack") { //TXS is only one that says not to set flags.
+      this.setStatus(St.NEG);
+    } 
+    // else {
+    //   this.clearStatus(St.NEG);
+    // }
+    return 2;
+  }
   branch(flag, invert) {
-    // read the ofset
+    // read the offset
     let lo = this.read(this.PC);
     this.PC++;
     let cycles = 2;
