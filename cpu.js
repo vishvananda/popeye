@@ -8,16 +8,16 @@ class Nes6502 {
     this.reset();
     this.lookup = {
       // nop
-      0xea: [this.nop, null, null, null, 2],
+      0xea: [this.nop],
       // clear
-      0x18: [this.flag, "CARRY", true, 2],
-      0xd8: [this.flag, "DEC", true, 2],
-      0x58: [this.flag, "INTD", true, 2],
-      0xb8: [this.flag, "OVER", true, 2],
+      0x18: [this.flag, St.CARRY, true],
+      0xd8: [this.flag, St.DEC, true],
+      0x58: [this.flag, St.INTD, true],
+      0xb8: [this.flag, St.OVER, true],
       // set
-      0x38: [this.flag, "CARRY", false, 2],
-      0xf8: [this.flag, "DEC", false, 2],
-      0x78: [this.flag, "INTD", false, 2],
+      0x38: [this.flag, St.CARRY, false],
+      0xf8: [this.flag, St.DEC, false],
+      0x78: [this.flag, St.INTD, false],
       // load
       0xa2: [this.load, Mode.IMM, "X", null, 2],
       0xa6: [this.load, Mode.ZERO, "X", null, 3],
@@ -58,14 +58,14 @@ class Nes6502 {
       // jmp
 
       // branch
-      0x90: [this.bcc, null, null, null, 2],
-      0xb0: [this.bcs, null, null, null, 2],
-      0xf0: [this.beq, null, null, null, 2],
-      0x30: [this.bmi, null, null, null, 2],
-      0xd0: [this.bne, null, null, null, 2],
-      0x10: [this.bpl, null, null, null, 2],
-      0x50: [this.bvc, null, null, null, 2],
-      0x70: [this.bvs, null, null, null, 2],
+      0x90: [this.branch, St.CARRY, true], // bcc
+      0xb0: [this.branch, St.CARRY, false], // bcs
+      0xd0: [this.branch, St.ZERO, true], // bne
+      0xf0: [this.branch, St.ZERO, false], // beq
+      0x10: [this.branch, St.NEG, true], // bpl
+      0x30: [this.branch, St.NEG, false], // bmi
+      0x50: [this.branch, St.OVER, true], // bvc
+      0x70: [this.branch, St.OVER, false], // bvs
 
       // alu
       0x6d: [this.adc, Mode.ABS, "A", null, 4], // ADC absolute
@@ -108,22 +108,17 @@ class Nes6502 {
     this.bus.write(address, data);
   }
 
-  // Addressing modes needed for other instructions
-  //   Implicit (CLC, RTS, etc.)
-  //   Accumulator (LSR, ROR, etc.)
-  //   Indirect without index (JMP)
-  //   Relative (BEQ, BNE)
-  nop (mode, tgt, off, cycles){
-    return cycles;
+  nop() {
+    return 2;
   }
-  flag (flag, clear, cycles){
-    if (clear){
-      this.clearStatus(St[flag]);
+
+  flag(flag, clear) {
+    if (clear) {
+      this.clearStatus(flag);
+    } else {
+      this.setStatus(flag);
     }
-    else {
-      this.setStatus(St[flag]);
-    }
-    return cycles;
+    return 2;
   }
 
   load(mode, tgt, off, cycles) {
@@ -206,36 +201,12 @@ class Nes6502 {
     return cycles;
   }
 
-  bcc(mode, tgt, off, cycles) {
-    return this.branch(!this.getStatus(St.CARRY), cycles);
-  }
-  bcs(mode, tgt, off, cycles) {
-    return this.branch(this.getStatus(St.CARRY), cycles);
-  }
-  beq(mode, tgt, off, cycles) {
-    return this.branch(this.getStatus(St.ZERO), cycles);
-  }
-  bmi(mode, tgt, off, cycles) {
-    return this.branch(this.getStatus(St.NEG), cycles);
-  }
-  bne(mode, tgt, off, cycles) {
-    return this.branch(!this.getStatus(St.ZERO), cycles);
-  }
-  bpl(mode, tgt, off, cycles) {
-    return this.branch(!this.getStatus(St.NEG), cycles);
-  }
-  bvc(mode, tgt, off, cycles) {
-    return this.branch(!this.getStatus(St.OVER), cycles);
-  }
-  bvs(mode, tgt, off, cycles) {
-    return this.branch(this.getStatus(St.OVER), cycles);
-  }
-
-  branch(check, cycles) {
+  branch(flag, invert) {
     // read the ofset
     let lo = this.read(this.PC);
     this.PC++;
-    if (check) {
+    let cycles = 2;
+    if (this.getStatus(flag) ^ invert) {
       cycles += 1; // if branch succeeds +1
       if (lo > 127) {
         lo -= 256;
