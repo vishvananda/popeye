@@ -1,28 +1,44 @@
 // NES emulator
 
+const { extensionSupported } = require("glfw-raub");
+
 class Nes6502 {
   constructor(bus) {
     this.bus = bus;
     this.reset();
     this.lookup = {
-      0xa2: [this.load, Mode.IMM, "X", null],
-      0xa6: [this.load, Mode.ZERO, "X", null],
-      0xb6: [this.load, Mode.ZERO, "X", this.Y],
-      0xae: [this.load, Mode.ABS, "X", null],
-      0xbe: [this.load, Mode.ABS, "X", this.Y],
-      0xa0: [this.load, Mode.IMM, "Y", null],
-      0xa4: [this.load, Mode.ZERO, "Y", null],
-      0xb4: [this.load, Mode.ZERO, "Y", this.X],
-      0xac: [this.load, Mode.ABS, "Y", null],
-      0xbc: [this.load, Mode.ABS, "Y", this.X],
-      0xa9: [this.load, Mode.IMM, "A", null],
-      0xa5: [this.load, Mode.ZERO, "A", null],
-      0xb5: [this.load, Mode.ZERO, "A", this.X],
-      0xad: [this.load, Mode.ABS, "A", null],
-      0xbd: [this.load, Mode.ABS, "A", this.X],
-      0xb9: [this.load, Mode.ABS, "A", this.Y],
-      // 0xa1: [this.load, Mode.IND, "A", this.X],
-      // 0xb1: [this.load, Mode.IND, "A", this.Y],
+      0xa2: [this.load, Mode.IMM, "X", null, 2],
+      0xa6: [this.load, Mode.ZERO, "X", null, 3],
+      0xb6: [this.load, Mode.ZERO, "X", "Y", 4],
+      0xae: [this.load, Mode.ABS, "X", null, 4],
+      0xbe: [this.load, Mode.ABS, "X", "Y", 4], //+1 if page crossed
+      0xa0: [this.load, Mode.IMM, "Y", null, 2],
+      0xa4: [this.load, Mode.ZERO, "Y", null, 3],
+      0xb4: [this.load, Mode.ZERO, "Y", "X", 4],
+      0xac: [this.load, Mode.ABS, "Y", null, 4],
+      0xbc: [this.load, Mode.ABS, "Y", "X", 4], //+1 if page crossed
+      0xa9: [this.load, Mode.IMM, "A", null, 2],
+      0xa5: [this.load, Mode.ZERO, "A", null, 3],
+      0xb5: [this.load, Mode.ZERO, "A", "X", 4],
+      0xad: [this.load, Mode.ABS, "A", null, 4],
+      0xbd: [this.load, Mode.ABS, "A", "X", 4],
+      0xb9: [this.load, Mode.ABS, "A", "Y", 4],
+      0xa1: [this.load, Mode.IND, "A", "X", 6],
+      0xb1: [this.load, Mode.IND, "A", "Y", 5],
+      0x86: [this.store, Mode.ZERO, "X", null, 3],
+      0x96: [this.store, Mode.ZERO, "X", "Y", 4],
+      0x8e: [this.store, Mode.ABS, "X", null, 4],
+      0x84: [this.store, Mode.ZERO, "Y", null, 3],
+      0x94: [this.store, Mode.ZERO, "Y", "X", 4],
+      0x8c: [this.store, Mode.ABS, "Y", null, 4],
+      0x85: [this.store, Mode.ZERO, "A", null, 3],
+      0x95: [this.store, Mode.ZERO, "A", "X", 4],
+      0x8d: [this.store, Mode.ABS, "A", null, 4],
+      0x9d: [this.store, Mode.ABS, "A", "X", 5],
+      0x99: [this.store, Mode.ABS, "A", "Y", 5],
+      0x81: [this.store, Mode.IND, "A", "X", 6],
+      0x91: [this.store, Mode.IND, "A", "Y", 6],
+      // need to add rest of instructions from http://www.obelisk.me.uk/6502/reference.html#STX -- Ox is $
     };
   }
 
@@ -59,33 +75,77 @@ class Nes6502 {
     this.bus.write(address, data);
   }
 
-  load(mode, tgt, off) {
+  // Addressing modes needed for other instructions
+  //   Implicit (CLC, RTS, etc.)
+  //   Accumulator (LSR, ROR, etc.)
+  //   Indirect without index (JMP)
+  //   Relative (BEQ, BNE)
+
+  calc_address(mode, off) {
     let addr = 0;
-    // TODO: indirect load
-    // TODO: cycle counting
-    if (mode == Mode.IMM) {
-      addr = this.PC;
-      this.PC++;
-    } else {
-      let lo = this.read(this.PC);
-      this.PC++;
-      let hi = 0;
-      if (mode == Mode.ABS) {
+    let first = this.read(this.PC);
+    let hi = 0;
+    let extra = 0;
+    this.PC++;
+    switch (mode) {
+      case Mode.ZERO:
+        addr = first;
+        if (off === "X") {
+          addr += this.X;
+        } else if (off === "Y") {
+          addr += this.Y;
+        }
+        addr &= 0xff;
+        break;
+      case Mode.ABS:
         hi = this.read(this.PC);
         this.PC++;
-      }
-      addr = (hi << 8) | lo;
+        addr = (hi << 8) | first;
+        if (off === "X") {
+          addr += this.X;
+        } else if (off === "Y") {
+          addr += this.Y;
+        }
+        // check page cross
+        if (addr >> 8 > hi) {
+          extra = 1;
+        }
+        break;
+      case Mode.IND:
+        if (off === "X") {
+          let ind = (first + this.X) & 0xff;
+          let lo = this.read(first + ind);
+          let hi = this.read(first + ind + 1);
+          addr = (hi << 8) | lo;
+        } else {
+          let lo = this.read(first);
+          let hi = this.read(first + 1);
+          addr = ((hi << 8) | lo) + this.Y;
+          // check page cross
+          if (addr >> 8 > hi) {
+            extra = 1;
+          }
+        }
+        break;
     }
-    if (off != null) {
-      if (off > 127) {
-        off -= 256;
-      }
-      addr += off;
-      if (mode == Mode.ZERO) {
-        addr &= 0xff;
-      }
+    return [addr, extra];
+  }
+
+  load(mode, tgt, off, cycles) {
+    if (mode == Mode.IMM) {
+      this[tgt] = this.read(this.PC);
+      this.PC++;
+      return cycles;
     }
+    let [addr, extra] = this.calc_address(mode, off);
     this[tgt] = this.read(addr);
+    return cycles + extra;
+  }
+
+  store(mode, tgt, off, cycles) {
+    let [addr, ,] = this.calc_address(mode, off);
+    this.write(addr, this[tgt]);
+    return cycles;
   }
 
   execute(ins) {
@@ -95,26 +155,9 @@ class Nes6502 {
     let parts = this.lookup[ins];
     if (parts !== undefined) {
       let [fn, mode, tgt, off] = parts;
-      fn.call(this, mode, tgt, off);
-      return;
+      return fn.call(this, mode, tgt, off);
     }
     switch (ins) {
-      case 0x8e: // STX (absolute)
-        // read the address
-        lo = this.read(this.PC);
-        this.PC++;
-        hi = this.read(this.PC);
-        this.PC++;
-        //  hi 0x80 0001000b
-        //  lo 0x40 0000100b
-        //  hi << 8 0x8000 000100000000000b
-        //  lo      0x0040 000000000000100b
-        //  hi | lo 0x8040 000100000000100b
-        addr = (hi << 8) | lo;
-
-        // store the value at X into address
-        this.write(addr, this.X);
-        break;
       case 0x18: // CLC
         // Clear Carry flag, set to 0
         this.clearStatus(St.CARRY);
@@ -191,16 +234,6 @@ class Nes6502 {
           this.PC += lo;
         }
         break;
-      case 0x8d: // STA (absolute)
-        // read the address
-        lo = this.read(this.PC);
-        this.PC++;
-        hi = this.read(this.PC);
-        this.PC++;
-        addr = (hi << 8) | lo;
-        // store the value at A into address
-        this.write(addr, this.A);
-        break;
       case 0xea: // NOP
         // No operation PC++ and nothing else
         break;
@@ -208,6 +241,7 @@ class Nes6502 {
         console.log("unknown instruction");
         break;
     }
+    return 0;
   }
 
   clock() {
