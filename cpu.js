@@ -54,12 +54,12 @@ class Nes6502 {
       0x91: [this.store, Mode.IND, "A", "Y", 6],
 
       // tx
-      0xaa: [this.tx, "A", "X"], //TAX
-      0xa8: [this.tx, "A", "Y"], //TAY
-      0xba: [this.tx, "Stack", "X"], //TSX
-      0x8a: [this.tx, "X", "A"], //TXA
-      0x9a: [this.tx, "X", "Stack"], //TXS
-      0x98: [this.tx, "Y", "A"], //TAY
+      0xaa: [this.tx, "A", "X"], // tax
+      0xa8: [this.tx, "A", "Y"], // tay
+      0xba: [this.tx, "Stack", "X"], // tsx
+      0x8a: [this.tx, "X", "A"], // txa
+      0x9a: [this.tx, "X", "Stack"], // txs
+      0x98: [this.tx, "Y", "A"], // tya
       // jmp
 
       //push
@@ -78,7 +78,20 @@ class Nes6502 {
 
       // alu
       0x6d: [this.adc, Mode.ABS, "A", null, 4], // ADC absolute
-      0x88: [this.dey, Mode.ABS, "A", null, 2], // Decrement Y
+
+      // inc/dec
+      0xe6: [this.incDec, Mode.ZERO, true, null, 5],
+      0xf6: [this.incDec, Mode.ZERO, true, "X", 6],
+      0xee: [this.incDec, Mode.ABS, true, null, 6],
+      0xfe: [this.incDec, Mode.ABS, true, "X", 7],
+      0xc6: [this.incDec, Mode.ZERO, false, null, 5],
+      0xd6: [this.incDec, Mode.ZERO, false, "X", 6],
+      0xce: [this.incDec, Mode.ABS, false, null, 6],
+      0xde: [this.incDec, Mode.ABS, false, "X", 7],
+      0xe8: [this.incReg, "X"], // inx
+      0xc8: [this.incReg, "Y"], // iny
+      0xca: [this.decReg, "X"], // dex
+      0x88: [this.decReg, "Y"], // dey
 
       // need to add rest of instructions from http://www.obelisk.me.uk/6502/reference.html#STX -- Ox is $
     };
@@ -136,13 +149,13 @@ class Nes6502 {
       this.PC++;
       return cycles;
     }
-    let [addr, extra] = this.calc_address(mode, off);
+    let [addr, extra] = this.calcAddress(mode, off);
     this[tgt] = this.read(addr);
     return cycles + extra;
   }
 
   store(mode, tgt, off, cycles) {
-    let [addr, ,] = this.calc_address(mode, off);
+    let [addr, ,] = this.calcAddress(mode, off);
     this.write(addr, this[tgt]);
     return cycles;
   }
@@ -193,40 +206,55 @@ class Nes6502 {
     return cycles;
   }
 
-  dey(mode, tgt, off, cycles) {
-    // Subtracts one from the Y register setting the zero and negative flags as appropriate.
-    this.Y--;
-    if (this.Y === 0) {
-      this.setStatus(St.ZERO);
+  incDec(mode, dir, off, cycles) {
+    let [addr, ,] = this.calcAddress(mode, off);
+    let val = this.read(addr);
+    if (dir) {
+      val++;
     } else {
-      this.clearStatus(St.ZERO);
+      val--;
     }
-    // Negative FlagSet if bit 7 of Y is set
-    if (this.Y & 0x80) {
-      this.setStatus(St.NEG);
-    } else {
-      this.clearStatus(St.NEG);
-    }
+    this.setFlags(val);
+    this.write(addr, val);
     return cycles;
+  }
+
+  incReg(reg) {
+    // Adds one to the register setting the zero and negative flags as appropriate.
+    this[reg]++;
+    this.setFlags(this[reg]);
+    return 2;
+  }
+
+  decReg(reg) {
+    // Subtracts one from the register setting the zero and negative flags as appropriate.
+    this[reg]--;
+    this.setFlags(this[reg]);
+    return 2;
   }
 
   tx(source, destination) {
     this[destination] = this[source];
     if (destination != "Stack") {
       //TXS is only one that says not to set flags.
-      if (this[destination] === 0) {
-        this.setStatus(St.ZERO);
-      } else {
-        this.clearStatus(St.ZERO);
-      }
-      if (this[destination] & 0x80) {
-        this.setStatus(St.NEG);
-      } else {
-        this.clearStatus(St.NEG);
-      }
+      this.setFlags(destination);
     }
     return 2;
   }
+
+  setFlags(val) {
+    if (val === 0) {
+      this.setStatus(St.ZERO);
+    } else {
+      this.clearStatus(St.ZERO);
+    }
+    if (val & 0x80) {
+      this.setStatus(St.NEG);
+    } else {
+      this.clearStatus(St.NEG);
+    }
+  }
+
   branch(flag, invert) {
     // read the offset
     let lo = this.read(this.PC);
@@ -246,7 +274,7 @@ class Nes6502 {
     return cycles;
   }
 
-  calc_address(mode, off) {
+  calcAddress(mode, off) {
     let addr = 0;
     let first = this.read(this.PC);
     let hi = 0;
