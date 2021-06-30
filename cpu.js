@@ -7,6 +7,13 @@ class Nes6502 {
     this.bus = bus;
     this.reset();
     this.lookup = {
+      // nop
+
+      // clear
+
+      // set
+
+      // load
       0xa2: [this.load, Mode.IMM, "X", null, 2],
       0xa6: [this.load, Mode.ZERO, "X", null, 3],
       0xb6: [this.load, Mode.ZERO, "X", "Y", 4],
@@ -25,6 +32,8 @@ class Nes6502 {
       0xb9: [this.load, Mode.ABS, "A", "Y", 4],
       0xa1: [this.load, Mode.IND, "A", "X", 6],
       0xb1: [this.load, Mode.IND, "A", "Y", 5],
+
+      // store
       0x86: [this.store, Mode.ZERO, "X", null, 3],
       0x96: [this.store, Mode.ZERO, "X", "Y", 4],
       0x8e: [this.store, Mode.ABS, "X", null, 4],
@@ -38,6 +47,15 @@ class Nes6502 {
       0x99: [this.store, Mode.ABS, "A", "Y", 5],
       0x81: [this.store, Mode.IND, "A", "X", 6],
       0x91: [this.store, Mode.IND, "A", "Y", 6],
+
+      // tx
+
+      // jmp
+
+      // branch
+
+      // alu
+
       // need to add rest of instructions from http://www.obelisk.me.uk/6502/reference.html#STX -- Ox is $
     };
   }
@@ -266,7 +284,8 @@ const Mode = {
   IMM: 1 << 0,
   ZERO: 1 << 1,
   ABS: 1 << 2,
-  IND: 1 << 4,
+  IND: 1 << 3,
+  ACC: 1 << 4,
 };
 
 module.exports = Nes6502;
