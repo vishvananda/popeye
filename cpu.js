@@ -10,14 +10,14 @@ class Nes6502 {
       // nop
       0xea: [this.nop, null, null, null, 2],
       // clear
-      0x18: [this.clc, null, null, null, 2],
-      0xd8: [this.cld, null, null, null, 2],
-      0x58: [this.cli, null, null, null, 2],
-      0xb8: [this.clv, null, null, null, 2],
+      0x18: [this.flag, "CARRY", true, 2],
+      0xd8: [this.flag, "DEC", true, 2],
+      0x58: [this.flag, "INTD", true, 2],
+      0xb8: [this.flag, "OVER", true, 2],
       // set
-      0x38: [this.sec, null, null, null, 2],
-      0xf8: [this.sed, null, null, null, 2],
-      0x78: [this.sei, null, null, null, 2],
+      0x38: [this.flag, "CARRY", false, 2],
+      0xf8: [this.flag, "DEC", false, 2],
+      0x78: [this.flag, "INTD", false, 2],
       // load
       0xa2: [this.load, Mode.IMM, "X", null, 2],
       0xa6: [this.load, Mode.ZERO, "X", null, 3],
@@ -109,32 +109,13 @@ class Nes6502 {
   nop (mode, tgt, off, cycles){
     return cycles;
   }
-  clc (mode, tgt, off, cycles){
-    this.clearStatus(St.CARRY);
-    return cycles;
-  }
-  cld (mode, tgt, off, cycles){
-    this.clearStatus(St.DEC);
-    return cycles;
-  }
-  cli (mode, tgt, off, cycles){
-    this.clearStatus(St.INTD);
-    return cycles;
-  }
-  clv (mode, tgt, off, cycles){
-    this.clearStatus(St.OVER);
-    return cycles;
-  }
-  sec (mode, tgt, off, cycles){
-    this.setStatus(St.CARRY);
-    return cycles;
-  }
-  sed (mode, tgt, off, cycles){
-    this.setStatus(St.DEC);
-    return cycles;
-  }
-  sei (mode, tgt, off, cycles){
-    this.setStatus(St.INTD);
+  flag (flag, clear, cycles){
+    if (clear){
+      this.clearStatus(St[flag]);
+    }
+    else {
+      this.setStatus(St[flag]);
+    }
     return cycles;
   }
 
@@ -153,6 +134,22 @@ class Nes6502 {
     let [addr, ,] = this.calc_address(mode, off);
     this.write(addr, this[tgt]);
     return cycles;
+  }
+
+  bne (mode, tgt, off, cycles){
+  // read the offset
+  let lo = this.read(this.PC);
+  this.PC++;
+  // If the zero flag is clear then add the relative displacement to the program counter to cause a branch to a new location.
+  if (!this.getStatus(St.ZERO)) {
+    if (lo > 127) {
+      lo -= 256;
+      // cycles += 1 //??? if branch succeeds +1
+    }
+    this.PC += lo;
+  }
+  // cycles +=2 //??? if new page +2
+  return cycles;
   }
 
   adc (mode, tgt, off, cycles){
@@ -215,22 +212,6 @@ class Nes6502 {
     } else {
       this.clearStatus(St.NEG);
     }
-    return cycles;
-  }
-
-  bne (mode, tgt, off, cycles){
-    // read the offset
-    let lo = this.read(this.PC);
-    this.PC++;
-    // If the zero flag is clear then add the relative displacement to the program counter to cause a branch to a new location.
-    if (!this.getStatus(St.ZERO)) {
-      if (lo > 127) {
-        lo -= 256;
-        // cycles += 1 //??? if branch succeeds +1
-      }
-      this.PC += lo;
-    }
-    // cycles +=2 //??? if new page +2
     return cycles;
   }
 
