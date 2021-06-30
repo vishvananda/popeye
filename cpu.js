@@ -58,7 +58,14 @@ class Nes6502 {
       // jmp
 
       // branch
-      0xd0: [this.bne, null, null, null, 2], // branch if not equal -- cycles 2 (+1 if branch succeeds +2 if to a new page)
+      0x90: [this.bcc, null, null, null, 2],
+      0xb0: [this.bcs, null, null, null, 2],
+      0xf0: [this.beq, null, null, null, 2],
+      0x30: [this.bmi, null, null, null, 2],
+      0xd0: [this.bne, null, null, null, 2],
+      0x10: [this.bpl, null, null, null, 2],
+      0x50: [this.bvc, null, null, null, 2],
+      0x70: [this.bvs, null, null, null, 2],
 
       // alu
       0x6d: [this.adc, Mode.ABS, "A", null, 4], // ADC absolute
@@ -136,23 +143,7 @@ class Nes6502 {
     return cycles;
   }
 
-  bne (mode, tgt, off, cycles){
-  // read the offset
-  let lo = this.read(this.PC);
-  this.PC++;
-  // If the zero flag is clear then add the relative displacement to the program counter to cause a branch to a new location.
-  if (!this.getStatus(St.ZERO)) {
-    if (lo > 127) {
-      lo -= 256;
-      // cycles += 1 //??? if branch succeeds +1
-    }
-    this.PC += lo;
-  }
-  // cycles +=2 //??? if new page +2
-  return cycles;
-  }
-
-  adc (mode, tgt, off, cycles){
+  adc(mode, tgt, off, cycles) {
     // Add to accumulator with a Carry
     // This instruction adds the contents of a memory location to the accumulator together with the carry bit. If overflow occurs the carry bit is set, this enables multiple byte addition to be performed.
     let lo = this.read(this.PC);
@@ -198,7 +189,7 @@ class Nes6502 {
     return cycles;
   }
 
-  dey (mode, tgt, off, cycles){
+  dey(mode, tgt, off, cycles) {
     // Subtracts one from the Y register setting the zero and negative flags as appropriate.
     this.Y--;
     if (this.Y === 0) {
@@ -211,6 +202,49 @@ class Nes6502 {
       this.setStatus(St.NEG);
     } else {
       this.clearStatus(St.NEG);
+    }
+    return cycles;
+  }
+
+  bcc(mode, tgt, off, cycles) {
+    return this.branch(!this.getStatus(St.CARRY), cycles);
+  }
+  bcs(mode, tgt, off, cycles) {
+    return this.branch(this.getStatus(St.CARRY), cycles);
+  }
+  beq(mode, tgt, off, cycles) {
+    return this.branch(this.getStatus(St.ZERO), cycles);
+  }
+  bmi(mode, tgt, off, cycles) {
+    return this.branch(this.getStatus(St.NEG), cycles);
+  }
+  bne(mode, tgt, off, cycles) {
+    return this.branch(!this.getStatus(St.ZERO), cycles);
+  }
+  bpl(mode, tgt, off, cycles) {
+    return this.branch(!this.getStatus(St.NEG), cycles);
+  }
+  bvc(mode, tgt, off, cycles) {
+    return this.branch(!this.getStatus(St.OVER), cycles);
+  }
+  bvs(mode, tgt, off, cycles) {
+    return this.branch(this.getStatus(St.OVER), cycles);
+  }
+
+  branch(check, cycles) {
+    // read the ofset
+    let lo = this.read(this.PC);
+    this.PC++;
+    if (check) {
+      cycles += 1; // if branch succeeds +1
+      if (lo > 127) {
+        lo -= 256;
+      }
+      let hi = this.PC >> 8;
+      this.PC += lo;
+      if (this.PC >> 8 != hi) {
+        cycles += 1; // if new page +1
+      }
     }
     return cycles;
   }
@@ -266,99 +300,13 @@ class Nes6502 {
   }
 
   execute(ins) {
-    let lo = 0;
-    let hi = 0;
-    let addr = 0;
     let parts = this.lookup[ins];
     if (parts !== undefined) {
-      let [fn, mode, tgt, off] = parts;
-      return fn.call(this, mode, tgt, off);
+      let [fn, ...args] = parts;
+      return fn.apply(this, args);
     }
-    switch (ins) {
-      // case 0x18: // CLC
-      //   // Clear Carry flag, set to 0
-      //   this.clearStatus(St.CARRY);
-      //   break;
-      //note : loop will start back here after BNE
-      // case 0x6d: // ADC Absolute
-      //   // Add to accumulator with a Carry
-      //   // This instruction adds the contents of a memory location to the accumulator together with the carry bit. If overflow occurs the carry bit is set, this enables multiple byte addition to be performed.
-      //   lo = this.read(this.PC);
-      //   this.PC++;
-      //   hi = this.read(this.PC);
-      //   this.PC++;
-      //   addr = (hi << 8) | lo;
-
-      //   lo = this.read(addr);
-      //   // the carry flag is bit 0 so we can use the value directly
-      //   var sum = this.A + lo + (this.Status & St.CARRY);
-      //   // additional instructions for ADC:
-      //   // Zero Flag	Set if A = 0
-      //   if (sum === 0) {
-      //     this.setStatus(St.ZERO);
-      //   }
-      //   {
-      //     this.clearStatus(St.ZERO);
-      //   }
-      //   // 0x80 the top bit  is 10000000b
-      //   // Negative Flag	Set if bit 7 set
-      //   if (sum & 0x80) {
-      //     this.setStatus(St.NEG);
-      //   } else {
-      //     this.clearStatus(St.NEG);
-      //   }
-
-      //   // Overflow Flag Set if sign bit is incorrect
-      //   if ((this.A ^ sum) & (lo ^ sum) & 0x80) {
-      //     this.setStatus(St.OVER);
-      //   } else {
-      //     this.clearStatus(St.OVER);
-      //   }
-
-      //   // Carry Set if value over 8 bits.
-      //   if (sum > 0xff) {
-      //     this.setStatus(St.CARRY);
-      //   } else {
-      //     this.clearStatus(St.CARRY);
-      //   }
-
-      //   this.A = sum & 0xff;
-      //   break;
-      // case 0x88: // DEY
-      //   // Subtracts one from the Y register setting the zero and negative flags as appropriate.
-      //   this.Y--;
-      //   if (this.Y === 0) {
-      //     this.setStatus(St.ZERO);
-      //   } else {
-      //     this.clearStatus(St.ZERO);
-      //   }
-      //   // Negative FlagSet if bit 7 of Y is set
-      //   if (this.Y & 0x80) {
-      //     this.setStatus(St.NEG);
-      //   } else {
-      //     this.clearStatus(St.NEG);
-      //   }
-      //   break;
-      // case 0xd0: // BNE (loop)
-      //   // read the offset
-      //   lo = this.read(this.PC);
-      //   this.PC++;
-      //   // If the zero flag is clear then add the relative displacement to the program counter to cause a branch to a new location. Unsure how to do this
-      //   if (!this.getStatus(St.ZERO)) {
-      //     if (lo > 127) {
-      //       lo -= 256;
-      //     }
-      //     this.PC += lo;
-      //   }
-      //   break;
-      // case 0xea: // NOP
-      //   // No operation PC++ and nothing else
-      //   break;
-      default:
-        console.log("unknown instruction");
-        break;
-    }
-    return 0;
+    console.log("unknown instruction");
+    process.exit(1);
   }
 
   clock() {
