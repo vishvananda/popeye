@@ -2,6 +2,7 @@ const glfw = require("glfw-raub");
 const IO = require("./io");
 const Cpu = require("./cpu");
 const Bus = require("./bus");
+const Input = require("./input");
 
 var c = 0;
 function run() {
@@ -132,9 +133,10 @@ function loadProgram() {
 }
 
 const io = new IO(w, h);
-io.registerKeyPressHandler(handleKey);
-const bus = new Bus();
+const input = new Input(io);
+const bus = new Bus(io);
 const cpu = new Cpu(bus);
+io.registerKeyPressHandler(handleKey);
 loadProgram();
 dump();
 run();
