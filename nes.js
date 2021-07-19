@@ -73,7 +73,8 @@ function dump() {
   var offset = 0x0000;
   console.log(hexdump(buf, offset, length));
   offset = 0x8000;
-  console.log(hexdump(buf, offset, length));
+  const buf2 = Buffer.from(bus.rom);
+  console.log(hexdump(buf2, offset, length));
 }
 
 const w = 256;
@@ -120,12 +121,12 @@ function loadProgram() {
   code = code.split(" ");
   var offset = 0x8000;
   code.forEach(function (val) {
-    bus.ram[offset++] = parseInt(val, 16); // code converted to number from hex string
+    bus.rom[offset++] = parseInt(val, 16); // code converted to number from hex string
   });
 
   // Set Reset Vector
-  bus.ram[0xfffc] = 0x00;
-  bus.ram[0xfffd] = 0x80;
+  bus.rom[0xfffc] = 0x00;
+  bus.rom[0xfffd] = 0x80;
 
   // Reset
   cpu.reset();
@@ -134,7 +135,7 @@ function loadProgram() {
 
 const io = new IO(w, h);
 const input = new Input(io);
-const bus = new Bus(io);
+const bus = new Bus(input);
 const cpu = new Cpu(bus);
 io.registerKeyPressHandler(handleKey);
 loadProgram();

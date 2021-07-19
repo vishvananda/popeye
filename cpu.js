@@ -1,7 +1,5 @@
 // NES emulator
 
-const { extensionSupported } = require("glfw-raub");
-
 class Nes6502 {
   constructor(bus) {
     this.bus = bus;
@@ -13,8 +11,8 @@ class Nes6502 {
       0x24: [this.bit, Mode.ZERO, 3],
       0x2c: [this.bit, Mode.ABS, 4],
 
-      //The BRK instruction forces the generation of an interrupt request. The program counter and processor status are pushed on the stack then the IRQ interrupt vector at $FFFE/F is loaded into the PC and the break flag in the status set to one.
-      0x00: [this.brk, Mode.IMP, 7],
+      // The BRK instruction forces the generation of an interrupt request. The program counter and processor status are pushed on the stack then the IRQ interrupt vector at $FFFE/F is loaded into the PC and the break flag in the status set to one.
+      // 0x00: [this.brk, Mode.IMP, 7],
 
       // clear; CLC CLD CLI CLV
       0x18: [this.flag, St.CARRY, true],
@@ -293,8 +291,9 @@ class Nes6502 {
     return [this.read(addr), extra];
   }
 
-  addSub(mode, sub, off, cycles) {
+  addSub(sub, mode, off, cycles) {
     let [val, extra] = this.getVal(mode, off);
+    console.log(val);
     // the carry flag is bit 0 so we can use the value directly
     if (sub) {
       val ^= 0xff;
@@ -612,6 +611,8 @@ class Nes6502 {
   execute(ins) {
     let parts = this.lookup[ins];
     if (parts !== undefined) {
+      console.log(ins);
+      console.log(parts);
       let [fn, ...args] = parts;
       return fn.apply(this, args);
     }
