@@ -3,10 +3,12 @@ const IO = require("./io");
 const Cpu = require("./cpu");
 const Bus = require("./bus");
 const Input = require("./input");
+const fs = require("fs");
 
 var c = 0;
 function run() {
   if (io.shouldClose || io.getKey(glfw.KEY_ESCAPE)) {
+    fs.writeFileSync("logtest.txt", cpu.log);
     io.shutdown();
     process.exit(0);
   }

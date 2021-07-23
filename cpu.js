@@ -1,5 +1,8 @@
 // NES emulator
-
+const fs = require("fs");
+function toHex8(val) {
+  return ("00" + val.toString(16).toUpperCase()).slice(-2);
+}
 class Nes6502 {
   constructor(bus) {
     this.bus = bus;
@@ -219,6 +222,9 @@ class Nes6502 {
     let lo = this.read(abs + 0);
     let hi = this.read(abs + 1);
     this.PC = (hi << 8) | lo; // 16-bit program counter
+
+    this.log = "";
+    this.cycles = 0;
   }
 
   setStatus(flag) {
@@ -617,13 +623,31 @@ class Nes6502 {
       return fn.apply(this, args);
     }
     console.log("unknown instruction");
+    fs.writeFileSync("logtest.txt", this.log);
     process.exit(1);
   }
 
   clock() {
     let ins = this.read(this.PC);
     this.PC++;
-    this.execute(ins);
+    this.cycles += this.execute(ins);
+    this.log +=
+      toHex8(this.PC) +
+      " " +
+      toHex8(ins) +
+      " A: " +
+      toHex8(this.A) +
+      " X: " +
+      toHex8(this.X) +
+      " Y: " +
+      toHex8(this.Y) +
+      " P: " +
+      toHex8(this.Status) +
+      " SP: " +
+      toHex8(this.Stack) +
+      " CYC: " +
+      this.cycles + //need to add cycle from where it is returned instead of hardcode
+      "\n";
   }
 }
 
