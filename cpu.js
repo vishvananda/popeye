@@ -9,6 +9,8 @@ function toHex16(val) {
 class Nes6502 {
   constructor(bus) {
     this.bus = bus;
+    let indx = "($%1,X) @ %x = %abs = %v";
+    let indy = "($%1),Y = %yyy @ %abs = %v";
     this.lookup = {
       // nop
       0xea: ["NOP", 1, this.nop],
@@ -30,38 +32,38 @@ class Nes6502 {
       0x78: ["SEI", 1, this.flag, St.INTD, false],
       // loads
       0xa2: ["LDX #$%1", 2, this.load, Mode.IMM, "X", null, 2],
-      0xa6: ["LDX $%1", 2, this.load, Mode.ZERO, "X", null, 3],
-      0xb6: ["LDX $%1,Y", 2, this.load, Mode.ZERO, "X", "Y", 4],
+      0xa6: ["LDX $%1 = %v", 2, this.load, Mode.ZERO, "X", null, 3],
+      0xb6: ["LDX $%1,Y @ %r = %v", 2, this.load, Mode.ZERO, "X", "Y", 4],
       0xae: ["LDX $%2%1 = %v", 3, this.load, Mode.ABS, "X", null, 4],
-      0xbe: ["LDX $%2%1,Y = %v", 3, this.load, Mode.ABS, "X", "Y", 4], //+1 if page crossed
+      0xbe: ["LDX $%2%1,Y @ %abs = %v", 3, this.load, Mode.ABS, "X", "Y", 4], //+1 if page crossed
       0xa0: ["LDY #$%1", 2, this.load, Mode.IMM, "Y", null, 2],
-      0xa4: ["LDY $%1", 2, this.load, Mode.ZERO, "Y", null, 3],
-      0xb4: ["LDY $%1,X", 2, this.load, Mode.ZERO, "Y", "X", 4],
+      0xa4: ["LDY $%1 = %v", 2, this.load, Mode.ZERO, "Y", null, 3],
+      0xb4: ["LDY $%1,X @ %r = %v", 2, this.load, Mode.ZERO, "Y", "X", 4],
       0xac: ["LDY $%2%1 = %v", 3, this.load, Mode.ABS, "Y", null, 4],
-      0xbc: ["LDY $%2%1,X = %v", 3, this.load, Mode.ABS, "Y", "X", 4], //+1 if page crossed
+      0xbc: ["LDY $%2%1,X @ %abs = %v", 3, this.load, Mode.ABS, "Y", "X", 4], //+1 if page crossed
       0xa9: ["LDA #$%1", 2, this.load, Mode.IMM, "A", null, 2],
-      0xa5: ["LDA $%1", 2, this.load, Mode.ZERO, "A", null, 3],
-      0xb5: ["LDA $%1,X", 2, this.load, Mode.ZERO, "A", "X", 4],
+      0xa5: ["LDA $%1 = %v", 2, this.load, Mode.ZERO, "A", null, 3],
+      0xb5: ["LDA $%1,X @ %r = %v", 2, this.load, Mode.ZERO, "A", "X", 4],
       0xad: ["LDA $%2%1 = %v", 3, this.load, Mode.ABS, "A", null, 4],
-      0xbd: ["LDA $%2%1,X = %v", 3, this.load, Mode.ABS, "A", "X", 4],
-      0xb9: ["LDA $%2%1,Y = %v", 3, this.load, Mode.ABS, "A", "Y", 4],
-      0xa1: ["LDA ($%1,X)", 2, this.load, Mode.IND, "A", "X", 6],
-      0xb1: ["LDA ($%1),Y", 2, this.load, Mode.IND, "A", "Y", 5],
+      0xbd: ["LDA $%2%1,X @ %abs = %v", 3, this.load, Mode.ABS, "A", "X", 4],
+      0xb9: ["LDA $%2%1,Y @ %abs = %v", 3, this.load, Mode.ABS, "A", "Y", 4],
+      0xa1: [`LDA ${indx}`, 2, this.load, Mode.IND, "A", "X", 6],
+      0xb1: [`LDA ${indy}`, 2, this.load, Mode.IND, "A", "Y", 5],
 
       // stores
       0x86: ["STX $%1 = %v", 2, this.store, Mode.ZERO, "X", null, 3],
-      0x96: ["STX $%1,Y = %v", 2, this.store, Mode.ZERO, "X", "Y", 4],
+      0x96: ["STX $%1,Y @ %r = %v", 2, this.store, Mode.ZERO, "X", "Y", 4],
       0x8e: ["STX $%2%1 = %v", 3, this.store, Mode.ABS, "X", null, 4],
       0x84: ["STY $%1 = %v", 2, this.store, Mode.ZERO, "Y", null, 3],
-      0x94: ["STY $%1,X = %v", 2, this.store, Mode.ZERO, "Y", "X", 4],
-      0x8c: ["STY $%2%1 = %v", 2, this.store, Mode.ABS, "Y", null, 4],
+      0x94: ["STY $%1,X @ %r = %v", 2, this.store, Mode.ZERO, "Y", "X", 4],
+      0x8c: ["STY $%2%1 = %v", 3, this.store, Mode.ABS, "Y", null, 4],
       0x85: ["STA $%1 = %v", 2, this.store, Mode.ZERO, "A", null, 3],
-      0x95: ["STA $%1,X = %v", 2, this.store, Mode.ZERO, "A", "X", 4],
+      0x95: ["STA $%1,X @ %r = %v", 2, this.store, Mode.ZERO, "A", "X", 4],
       0x8d: ["STA $%2%1 = %v", 3, this.store, Mode.ABS, "A", null, 4],
-      0x9d: ["STA $%2%1,X = %v", 3, this.store, Mode.ABS, "A", "X", 5],
-      0x99: ["STA $%2%1,Y = %v", 3, this.store, Mode.ABS, "A", "Y", 5],
-      0x81: ["STA ($%1,X) = %v", 2, this.store, Mode.IND, "A", "X", 6],
-      0x91: ["STA ($%1),Y = %v", 2, this.store, Mode.IND, "A", "Y", 6],
+      0x9d: ["STA $%2%1,X @ %abs = %v", 3, this.store, Mode.ABS, "A", "X", 5],
+      0x99: ["STA $%2%1,Y @ %abs = %v", 3, this.store, Mode.ABS, "A", "Y", 5],
+      0x81: [`STA ${indx}`, 2, this.store, Mode.IND, "A", "X", 6],
+      0x91: [`STA ${indy}`, 2, this.store, Mode.IND, "A", "Y", 6],
 
       // transfers
       0xaa: ["TAX", 1, this.tx, "A", "X"],
@@ -73,7 +75,7 @@ class Nes6502 {
 
       // jumps
       0x4c: ["JMP $%2%1", 3, this.jmp, Mode.ABS, 3], // JMP absolute. Sets the program counter to the address specified by the operand.
-      0x6c: ["JMP ($%2%1)", 3, this.jmp, Mode.IND, 5], // JMP indirect. Sets the program counter to the address specified by the operand.
+      0x6c: ["JMP ($%2%1) = %abs", 3, this.jmp, Mode.IND, 5], // JMP indirect. Sets the program counter to the address specified by the operand.
       0x20: ["JSR $%2%1", 3, this.jsr], // JSR. The JSR instruction pushes the address (minus one) of the return point on to the stack and then sets the program counter to the target memory address.
 
       // returns
@@ -100,99 +102,113 @@ class Nes6502 {
 
       // adc
       0x69: ["ADC #$%1", 2, this.addSub, false, Mode.IMM, null, 2],
-      0x65: ["ADC $%1", 2, this.addSub, false, Mode.ZERO, null, 3],
-      0x75: ["ADC $%1,X", 2, this.addSub, false, Mode.ZERO, "X", 4],
-      0x6d: ["ADC $%2%1", 3, this.addSub, false, Mode.ABS, null, 4],
-      0x7d: ["ADC $%2%1,X", 3, this.addSub, false, Mode.ABS, "X", 4], // +1 if page crossed
-      0x79: ["ADC $%2%1,Y", 3, this.addSub, false, Mode.ABS, "Y", 4], // +1 if page crossed
-      0x61: ["ADC ($%1,X)", 2, this.addSub, false, Mode.IND, "X", 6],
-      0x71: ["ADC ($%1),Y", 2, this.addSub, false, Mode.IND, "Y", 5], // +1 if page crossed
+      0x65: ["ADC $%1 = %v", 2, this.addSub, false, Mode.ZERO, null, 3],
+      0x75: ["ADC $%1,X @ %r = %v", 2, this.addSub, false, Mode.ZERO, "X", 4],
+      0x6d: ["ADC $%2%1 = %v", 3, this.addSub, false, Mode.ABS, null, 4],
+      0x7d: [
+        "ADC $%2%1,X @ %abs = %v",
+        3,
+        this.addSub,
+        false,
+        Mode.ABS,
+        "X",
+        4,
+      ], // +1 if page crossed
+      0x79: [
+        "ADC $%2%1,Y @ %abs = %v",
+        3,
+        this.addSub,
+        false,
+        Mode.ABS,
+        "Y",
+        4,
+      ], // +1 if page crossed
+      0x61: [`ADC ${indx}`, 2, this.addSub, false, Mode.IND, "X", 6],
+      0x71: [`ADC ${indy}`, 2, this.addSub, false, Mode.IND, "Y", 5], // +1 if page crossed
 
       // sbc
       0xe9: ["SBC #$%1", 2, this.addSub, true, Mode.IMM, null, 2],
-      0xe5: ["SBC $%1", 2, this.addSub, true, Mode.ZERO, null, 3],
-      0xf5: ["SBC $%1,X", 2, this.addSub, true, Mode.ZERO, "X", 4],
-      0xed: ["SBC $%2%1", 3, this.addSub, true, Mode.ABS, null, 4],
-      0xfd: ["SBC $%2%1,X", 3, this.addSub, true, Mode.ABS, "X", 4], // +1 if page crossed
-      0xf9: ["SBC $%2%1,Y", 3, this.addSub, true, Mode.ABS, "Y", 4], // +1 if page crossed
-      0xe1: ["SBC ($%1,X)", 2, this.addSub, true, Mode.IND, "X", 6],
-      0xf1: ["SBC ($%1),Y", 2, this.addSub, true, Mode.IND, "Y", 5], // +1 if page crossed
+      0xe5: ["SBC $%1 = %v", 2, this.addSub, true, Mode.ZERO, null, 3],
+      0xf5: ["SBC $%1,X @ %r = %v", 2, this.addSub, true, Mode.ZERO, "X", 4],
+      0xed: ["SBC $%2%1 = %v", 3, this.addSub, true, Mode.ABS, null, 4],
+      0xfd: ["SBC $%2%1,X @ %abs = %v", 3, this.addSub, true, Mode.ABS, "X", 4], // +1 if page crossed
+      0xf9: ["SBC $%2%1,Y @ %abs = %v", 3, this.addSub, true, Mode.ABS, "Y", 4], // +1 if page crossed
+      0xe1: [`SBC ${indx}`, 2, this.addSub, true, Mode.IND, "X", 6],
+      0xf1: [`SBC ${indy}`, 2, this.addSub, true, Mode.IND, "Y", 5], // +1 if page crossed
 
       // logical
       0x29: ["AND #$%1", 2, this.and, Mode.IMM, null, 2],
-      0x25: ["AND $%1", 2, this.and, Mode.ZERO, null, 3],
-      0x35: ["AND $%1,X", 2, this.and, Mode.ZERO, "X", 4],
-      0x2d: ["AND $%2%1", 3, this.and, Mode.ABS, null, 4],
-      0x3d: ["AND $%2%1,X", 3, this.and, Mode.ABS, "X", 4], // +1 if page crossed
-      0x39: ["AND $%2%1,Y", 3, this.and, Mode.ABS, "Y", 4], // +1 if page crossed
-      0x21: ["AND ($%1,X)", 2, this.and, Mode.IND, "X", 6],
-      0x31: ["AND ($%1),Y", 2, this.and, Mode.IND, "Y", 5], // +1 if page crossed
+      0x25: ["AND $%1 = %v", 2, this.and, Mode.ZERO, null, 3],
+      0x35: ["AND $%1,X @ %r = %v", 2, this.and, Mode.ZERO, "X", 4],
+      0x2d: ["AND $%2%1 = %v", 3, this.and, Mode.ABS, null, 4],
+      0x3d: ["AND $%2%1,X @ %abs = %v", 3, this.and, Mode.ABS, "X", 4], // +1 if page crossed
+      0x39: ["AND $%2%1,Y @ %abs = %v", 3, this.and, Mode.ABS, "Y", 4], // +1 if page crossed
+      0x21: [`AND ${indx}`, 2, this.and, Mode.IND, "X", 6],
+      0x31: [`AND ${indy}`, 2, this.and, Mode.IND, "Y", 5], // +1 if page crossed
       0x49: ["EOR #$%1", 2, this.xor, Mode.IMM, null, 2],
-      0x45: ["EOR $%1", 2, this.xor, Mode.ZERO, null, 3],
-      0x55: ["EOR $%1,X", 2, this.xor, Mode.ZERO, "X", 4],
-      0x4d: ["EOR $%2%1", 3, this.xor, Mode.ABS, null, 4],
-      0x5d: ["EOR $%2%1,X", 3, this.xor, Mode.ABS, "X", 4], // +1 if page crossed
-      0x59: ["EOR $%2%1,Y", 3, this.xor, Mode.ABS, "Y", 4], // +1 if page crossed
-      0x41: ["EOR ($%1,X)", 2, this.xor, Mode.IND, "X", 6],
-      0x51: ["EOR ($%1),Y", 2, this.xor, Mode.IND, "Y", 5], // +1 if page crossed
+      0x45: ["EOR $%1 = %v", 2, this.xor, Mode.ZERO, null, 3],
+      0x55: ["EOR $%1,X @ %r = %v", 2, this.xor, Mode.ZERO, "X", 4],
+      0x4d: ["EOR $%2%1 = %v", 3, this.xor, Mode.ABS, null, 4],
+      0x5d: ["EOR $%2%1,X @ %abs = %v", 3, this.xor, Mode.ABS, "X", 4], // +1 if page crossed
+      0x59: ["EOR $%2%1,Y @ %abs = %v", 3, this.xor, Mode.ABS, "Y", 4], // +1 if page crossed
+      0x41: [`EOR ${indx}`, 2, this.xor, Mode.IND, "X", 6],
+      0x51: [`EOR ${indy}`, 2, this.xor, Mode.IND, "Y", 5], // +1 if page crossed
       0x09: ["ORA #$%1", 2, this.or, Mode.IMM, null, 2],
-      0x05: ["ORA $%1", 2, this.or, Mode.ZERO, null, 3],
-      0x15: ["ORA $%1,X", 2, this.or, Mode.ZERO, "X", 4],
-      0x0d: ["ORA $%2%1", 3, this.or, Mode.ABS, null, 4],
-      0x1d: ["ORA $%2%1,X", 3, this.or, Mode.ABS, "X", 4], // +1 if page crossed
-      0x19: ["ORA $%2%1,Y", 3, this.or, Mode.ABS, "Y", 4], // +1 if page crossed
-      0x01: ["ORA ($%1,X)", 2, this.or, Mode.IND, "X", 6],
-      0x11: ["ORA ($%1),Y", 2, this.or, Mode.IND, "Y", 5], // +1 if page crossed
+      0x05: ["ORA $%1 = %v", 2, this.or, Mode.ZERO, null, 3],
+      0x15: ["ORA $%1,X @ %r = %v", 2, this.or, Mode.ZERO, "X", 4],
+      0x0d: ["ORA $%2%1 = %v", 3, this.or, Mode.ABS, null, 4],
+      0x1d: ["ORA $%2%1,X @ %abs = %v", 3, this.or, Mode.ABS, "X", 4], // +1 if page crossed
+      0x19: ["ORA $%2%1,Y @ %abs = %v", 3, this.or, Mode.ABS, "Y", 4], // +1 if page crossed
+      0x01: [`ORA ${indx}`, 2, this.or, Mode.IND, "X", 6],
+      0x11: [`ORA ${indy}`, 2, this.or, Mode.IND, "Y", 5], // +1 if page crossed
 
       // comparison
       0xc9: ["CMP #$%1", 2, this.cmp, Mode.IMM, "A", null, 2], //IMM. 2 cyc
-      0xc5: ["CMP $%1", 2, this.cmp, Mode.ZERO, "A", null, 3], //zero page. 3 cyc
-      0xd5: ["CMP $%1,X", 2, this.cmp, Mode.ZERO, "A", "X", 4], //zero page, X
-      0xcd: ["CMP $%2%1", 3, this.cmp, Mode.ABS, "A", null, 4], //ABS
-      0xdd: ["CMP $%2%1,X", 3, this.cmp, Mode.ABS, "A", "X", 4], //ABS, X +1 cycle if page cross
-      0xd9: ["CMP $%2%1,Y", 3, this.cmp, Mode.ABS, "A", "Y", 4], //ABS, Y +1 cycle if page cross
-      0xc1: ["CMP ($%1,X)", 2, this.cmp, Mode.IND, "A", "X", 6], //IND, X
-      0xd1: ["CMP ($%1),Y", 2, this.cmp, Mode.IND, "A", "Y", 5], //IND, Y +1 cycle if page cross
-      //cpx
+      0xc5: ["CMP $%1 = %v", 2, this.cmp, Mode.ZERO, "A", null, 3], //zero page. 3 cyc
+      0xd5: ["CMP $%1,X @ %r = %v", 2, this.cmp, Mode.ZERO, "A", "X", 4], //zero page, X
+      0xcd: ["CMP $%2%1 = %v", 3, this.cmp, Mode.ABS, "A", null, 4], //ABS
+      0xdd: ["CMP $%2%1,X @ %abs = %v", 3, this.cmp, Mode.ABS, "A", "X", 4], //ABS, X +1 cycle if page cross
+      0xd9: ["CMP $%2%1,Y @ %abs = %v", 3, this.cmp, Mode.ABS, "A", "Y", 4], //ABS, Y +1 cycle if page cross
+      0xc1: [`CMP ${indx}`, 2, this.cmp, Mode.IND, "A", "X", 6], //IND, X
+      0xd1: [`CMP ${indy}`, 2, this.cmp, Mode.IND, "A", "Y", 5], //IND, Y +1 cycle if page cross
       0xe0: ["CPX #$%1", 2, this.cmp, Mode.IMM, "X", null, 2], //IMM, compare X with another value
-      0xe4: ["CPX $%1", 2, this.cmp, Mode.ZERO, "X", null, 3], //ZERO, compare X with another value
-      0xec: ["CPX $%2%1", 3, this.cmp, Mode.ABS, "X", null, 4], //ABS, compare X with another value
-      //cpy
+      0xe4: ["CPX $%1 = %v", 2, this.cmp, Mode.ZERO, "X", null, 3], //ZERO, compare X with another value
+      0xec: ["CPX $%2%1 = %v", 3, this.cmp, Mode.ABS, "X", null, 4], //ABS, compare X with another value
       0xc0: ["CPY #$%1", 2, this.cmp, Mode.IMM, "Y", null, 2], //IMM, compare Y with another value
-      0xc4: ["CPY $%1", 2, this.cmp, Mode.ZERO, "Y", null, 3], //ZERO, compare Y with another value
-      0xcc: ["CPY $%2%1", 3, this.cmp, Mode.ABS, "Y", null, 4], //ABS, compare Y with another value
+      0xc4: ["CPY $%1 = %v", 2, this.cmp, Mode.ZERO, "Y", null, 3], //ZERO, compare Y with another value
+      0xcc: ["CPY $%2%1 = %v", 3, this.cmp, Mode.ABS, "Y", null, 4], //ABS, compare Y with another value
 
       // shifts
-      0x0a: ["ASL A", 1, this.shift, this.asl, Mode.ACC, null, 2],
-      0x06: ["ASL $%1", 2, this.shift, this.asl, Mode.ZERO, null, 5],
-      0x16: ["ASL $%1,X", 2, this.shift, this.asl, Mode.ZERO, "X", 6],
-      0x0e: ["ASL $%2%1", 3, this.shift, this.asl, Mode.ABS, null, 6],
-      0x1e: ["ASL $%2%1,X", 3, this.shift, this.asl, Mode.ABS, "X", 7],
-      0x4a: ["LSR A", 1, this.shift, this.lsr, Mode.ACC, null, 2],
-      0x46: ["LSR $%1", 2, this.shift, this.lsr, Mode.ZERO, null, 5],
-      0x56: ["LSR $%1,X", 2, this.shift, this.lsr, Mode.ZERO, "X", 6],
-      0x4e: ["LSR $%2%1", 3, this.shift, this.lsr, Mode.ABS, null, 6],
-      0x5e: ["LSR $%2%1,X", 3, this.shift, this.lsr, Mode.ABS, "X", 7],
-      0x2a: ["ROL A", 1, this.shift, this.rol, Mode.ACC, null, 2],
-      0x26: ["ROL $%1", 2, this.shift, this.rol, Mode.ZERO, null, 5],
-      0x36: ["ROL $%1,X", 2, this.shift, this.rol, Mode.ZERO, "X", 6],
-      0x2e: ["ROL $%2%1", 3, this.shift, this.rol, Mode.ABS, null, 6],
-      0x3e: ["ROL $%2%1,X", 3, this.shift, this.rol, Mode.ABS, "X", 7],
-      0x6a: ["ROR A", 1, this.shift, this.ror, Mode.ACC, null, 2],
-      0x66: ["ROR $%1", 2, this.shift, this.ror, Mode.ZERO, null, 5],
-      0x76: ["ROR $%1", 2, this.shift, this.ror, Mode.ZERO, "X", 6],
-      0x6e: ["ROR $%2%1,X", 3, this.shift, this.ror, Mode.ABS, null, 6],
-      0x7e: ["ROR $%2%1,X", 3, this.shift, this.ror, Mode.ABS, "X", 7],
+      0x0a: ["ASL A", 1, this.sh, this.asl, Mode.ACC, null, 2],
+      0x06: ["ASL $%1 = %v", 2, this.sh, this.asl, Mode.ZERO, null, 5],
+      0x16: ["ASL $%1,X @ %r = %v", 2, this.sh, this.asl, Mode.ZERO, "X", 6],
+      0x0e: ["ASL $%2%1 = %v", 3, this.sh, this.asl, Mode.ABS, null, 6],
+      0x1e: ["ASL $%2%1,X @ %abs = %v", 3, this.sh, this.asl, Mode.ABS, "X", 7],
+      0x4a: ["LSR A", 1, this.sh, this.lsr, Mode.ACC, null, 2],
+      0x46: ["LSR $%1 = %v", 2, this.sh, this.lsr, Mode.ZERO, null, 5],
+      0x56: ["LSR $%1,X @ %r = %v", 2, this.sh, this.lsr, Mode.ZERO, "X", 6],
+      0x4e: ["LSR $%2%1 = %v", 3, this.sh, this.lsr, Mode.ABS, null, 6],
+      0x5e: ["LSR $%2%1,X @ %abs = %v", 3, this.sh, this.lsr, Mode.ABS, "X", 7],
+      0x2a: ["ROL A", 1, this.sh, this.rol, Mode.ACC, null, 2],
+      0x26: ["ROL $%1 = %v", 2, this.sh, this.rol, Mode.ZERO, null, 5],
+      0x36: ["ROL $%1,X @ %r = %v", 2, this.sh, this.rol, Mode.ZERO, "X", 6],
+      0x2e: ["ROL $%2%1 = %v", 3, this.sh, this.rol, Mode.ABS, null, 6],
+      0x3e: ["ROL $%2%1,X @ %abs = %v", 3, this.sh, this.rol, Mode.ABS, "X", 7],
+      0x6a: ["ROR A", 1, this.sh, this.ror, Mode.ACC, null, 2],
+      0x66: ["ROR $%1 = %v", 2, this.sh, this.ror, Mode.ZERO, null, 5],
+      0x76: ["ROR $%1,X @ %r = %v", 2, this.sh, this.ror, Mode.ZERO, "X", 6],
+      0x6e: ["ROR $%2%1 = %v", 3, this.sh, this.ror, Mode.ABS, null, 6],
+      0x7e: ["ROR $%2%1,X @ %abs = %v", 3, this.sh, this.ror, Mode.ABS, "X", 7],
 
       // inc/dec
-      0xe6: ["INC $%1", 2, this.incDec, Mode.ZERO, true, null, 5],
-      0xf6: ["INC $%1,X", 2, this.incDec, Mode.ZERO, true, "X", 6],
-      0xee: ["INC $%2%1", 3, this.incDec, Mode.ABS, true, null, 6],
-      0xfe: ["INC $%2%1,X", 3, this.incDec, Mode.ABS, true, "X", 7],
-      0xc6: ["DEC $%1", 2, this.incDec, Mode.ZERO, false, null, 5],
-      0xd6: ["DEC $%1,X", 2, this.incDec, Mode.ZERO, false, "X", 6],
-      0xce: ["DEC $%2%1", 3, this.incDec, Mode.ABS, false, null, 6],
-      0xde: ["DEC $%2%1,X", 3, this.incDec, Mode.ABS, false, "X", 7],
+      0xe6: ["INC $%1 = %v", 2, this.inc, Mode.ZERO, true, null, 5],
+      0xf6: ["INC $%1,X @ %r = %v", 2, this.inc, Mode.ZERO, true, "X", 6],
+      0xee: ["INC $%2%1 = %v", 3, this.inc, Mode.ABS, true, null, 6],
+      0xfe: ["INC $%2%1,X @ %abs = %v", 3, this.inc, Mode.ABS, true, "X", 7],
+      0xc6: ["DEC $%1 = %v", 2, this.inc, Mode.ZERO, false, null, 5],
+      0xd6: ["DEC $%1,X @ %r = %v", 2, this.inc, Mode.ZERO, false, "X", 6],
+      0xce: ["DEC $%2%1 = %v", 3, this.inc, Mode.ABS, false, null, 6],
+      0xde: ["DEC $%2%1,X @ %abs = %v", 3, this.inc, Mode.ABS, false, "X", 7],
       0xe8: ["INX", 1, this.incReg, "X"],
       0xc8: ["INY", 1, this.incReg, "Y"],
       0xca: ["DEX", 1, this.decReg, "X"],
@@ -203,8 +219,11 @@ class Nes6502 {
   }
 
   reset() {
+    // for logging
     this.addr = 0; // stores last memory address location
     this.last = 0; // stores value of last memory address location
+    this.ind = 0; // stores the indirect location
+
     this.A = 0x00; // 8-bit accumulator
     this.X = 0x00; // 8-bit x register
     this.Y = 0x00; // 8-bit y register
@@ -374,7 +393,7 @@ class Nes6502 {
     return cycles + extra;
   }
 
-  shift(opfn, mode, off, cycles) {
+  sh(opfn, mode, off, cycles) {
     let addr = 0;
     let val = 0;
     if (mode == Mode.ACC) {
@@ -388,7 +407,7 @@ class Nes6502 {
     if (mode == Mode.ACC) {
       this.A = res;
     } else {
-      this.write(addr, val);
+      this.write(addr, res);
     }
     return cycles;
   }
@@ -416,7 +435,7 @@ class Nes6502 {
     let carry = this.getStatus(St.CARRY);
     let res = this.asl(val);
     if (carry) {
-      res &= 0x01;
+      res |= 0x01;
     }
     return res;
   }
@@ -425,7 +444,7 @@ class Nes6502 {
     let carry = this.getStatus(St.CARRY);
     let res = this.lsr(val);
     if (carry) {
-      res &= 0x80;
+      res |= 0x80;
     }
     return res;
   }
@@ -435,13 +454,13 @@ class Nes6502 {
     return cycles + extra;
   }
 
-  incDec(mode, dir, off, cycles) {
+  inc(mode, dir, off, cycles) {
     let [addr, ,] = this.calcAddress(mode, off);
     let val = this.read(addr);
     if (dir) {
-      val++;
+      val = ++val & 0xff;
     } else {
-      val--;
+      val = --val & 0xff;
     }
     this.setFlags(val);
     this.write(addr, val);
@@ -498,14 +517,9 @@ class Nes6502 {
 
   jmp(mode, cycles) {
     let addr = this.readAddr();
-    if (mode === mode.IND) {
+    if (mode === Mode.IND) {
       // handle the bug in 6502
-      let second = 0;
-      if (addr & (0xff === 0xff)) {
-        second = addr & 0xff00;
-      } else {
-        second = addr + 1;
-      }
+      let second = (addr & 0xff00) | ((addr + 1) & 0xff);
       let lo = this.read(addr);
       let hi = this.read(second);
       addr = (hi << 8) | lo;
@@ -606,23 +620,25 @@ class Nes6502 {
         } else if (off === "Y") {
           addr += this.Y;
         }
+        addr &= 0xffff;
         // check page cross
-        if (addr >> 8 > hi) {
+        if (addr >> 8 != hi) {
           extra = 1;
         }
         break;
       case Mode.IND:
         if (off === "X") {
-          let ind = (first + this.X) & 0xff;
-          let lo = this.read(first + ind);
-          let hi = this.read(first + ind + 1);
+          this.ind = (first + this.X) & 0xff;
+          let lo = this.read(this.ind);
+          let hi = this.read((this.ind + 1) & 0xff);
           addr = (hi << 8) | lo;
         } else {
           let lo = this.read(first);
-          let hi = this.read(first + 1);
-          addr = ((hi << 8) | lo) + this.Y;
+          let hi = this.read((first + 1) & 0xff);
+          this.ind = (hi << 8) | lo;
+          addr = (this.ind + this.Y) & 0xffff;
           // check page cross
-          if (addr >> 8 > hi) {
+          if (addr >> 8 != hi) {
             extra = 1;
           }
         }
@@ -658,6 +674,9 @@ class Nes6502 {
     this.PC++;
     this.cycles += fn.apply(this, args);
     // write calculated values
+    ret = ret.replace("%x", toHex8(this.ind));
+    ret = ret.replace("%yyy", toHex16(this.ind));
+    ret = ret.replace("%r", toHex8(this.addr));
     ret = ret.replace("%abs", toHex16(this.addr));
     ret = ret.replace("%v", toHex8(this.last));
     return ret;
