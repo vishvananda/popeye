@@ -3,12 +3,31 @@ const IO = require("./io");
 const Cpu = require("./cpu");
 const Bus = require("./bus");
 const Input = require("./input");
+const fs = require("fs");
+
+var running = false;
+var linenum = 0;
+var logs = null;
+const LOG = "nestest.log";
+const CANONICAL_LOG = "canonical.nestest.log";
 
 var c = 0;
 function run() {
   if (io.shouldClose || io.getKey(glfw.KEY_ESCAPE)) {
     io.shutdown();
     process.exit(0);
+  }
+  if (running) {
+    let log = cpu.clock();
+    fs.appendFileSync(LOG, log + "\n");
+    // ignore SL for now
+    let line = logs[linenum++].trim().replace(/PPU:.{7}/, "PPU:  0,  0");
+    if (log != line) {
+      console.log("ERROR ON LINE ", linenum);
+      console.log(`OURS:   '${log}'`);
+      console.log(`THEIRS: '${line}'`);
+      process.exit(1);
+    }
   }
   c++;
   if (c > 255) c = 0;
@@ -30,11 +49,6 @@ function run() {
   io.setPixel(254, 239, 0, 0, c);
   io.setPixel(255, 239, 0, 0, c);
   io.tick(run);
-}
-
-function clock() {
-  cpu.clock();
-  dump();
 }
 
 function toHex8(val) {
@@ -86,10 +100,15 @@ function handleKey(key) {
   switch (key) {
     case "s":
       // single step processor
-      clock();
+      {
+        let log = cpu.clock();
+        fs.appendFileSync(LOG, log + "\n");
+        dump();
+      }
       break;
-    case "r":
-      // run processor
+    case "d":
+      // debug run
+      running = !running;
       break;
     default:
       console.log(key + " was pressed.");
@@ -105,6 +124,10 @@ const cpu = new Cpu(bus);
 io.registerKeyPressHandler(handleKey);
 bus.loadRom("nestest.nes");
 cpu.reset();
+// clear log
+fs.writeFileSync(LOG, "");
+// load canonical log
+logs = fs.readFileSync(CANONICAL_LOG, "utf8").split("\n");
 // force automation mode
 cpu.PC = 0xc000;
 dump();

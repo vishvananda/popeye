@@ -1,5 +1,4 @@
 // NES emulator
-const fs = require("fs");
 function toHex8(val) {
   return ("00" + val.toString(16).toUpperCase()).slice(-2);
 }
@@ -7,216 +6,205 @@ function toHex16(val) {
   return ("0000" + val.toString(16).toUpperCase()).slice(-4);
 }
 
-const LOG = "logtest.txt";
 class Nes6502 {
   constructor(bus) {
-    fs.writeFileSync(LOG, "");
     this.bus = bus;
     this.lookup = {
       // nop
-      0xea: [this.nop],
+      0xea: ["NOP", 1, this.nop],
       // BIT This instructions is used to test if one or more bits are set in a target memory location. The mask pattern in A is ANDed with the value in memory to set or clear the zero flag, but the result is not kept. Bits 7 and 6 of the value from memory are copied into the N and V flags.
-      0x24: [this.bit, Mode.ZERO, 3],
-      0x2c: [this.bit, Mode.ABS, 4],
+      0x24: ["BIT $%1 = %v", 2, this.bit, Mode.ZERO, 3],
+      0x2c: ["BIT $%2%1 = %v", 3, this.bit, Mode.ABS, 4],
 
       // The BRK instruction forces the generation of an interrupt request. The program counter and processor status are pushed on the stack then the IRQ interrupt vector at $FFFE/F is loaded into the PC and the break flag in the status set to one.
       // 0x00: [this.brk, Mode.IMP, 7],
 
-      // clear; CLC CLD CLI CLV
-      0x18: [this.flag, St.CARRY, true],
-      0xd8: [this.flag, St.DEC, true],
-      0x58: [this.flag, St.INTD, true],
-      0xb8: [this.flag, St.OVER, true],
-      // set; SEC SED SEI
-      0x38: [this.flag, St.CARRY, false],
-      0xf8: [this.flag, St.DEC, false],
-      0x78: [this.flag, St.INTD, false],
-      // load
-      0xa2: [this.load, Mode.IMM, "X", null, 2],
-      0xa6: [this.load, Mode.ZERO, "X", null, 3],
-      0xb6: [this.load, Mode.ZERO, "X", "Y", 4],
-      0xae: [this.load, Mode.ABS, "X", null, 4],
-      0xbe: [this.load, Mode.ABS, "X", "Y", 4], //+1 if page crossed
-      0xa0: [this.load, Mode.IMM, "Y", null, 2],
-      0xa4: [this.load, Mode.ZERO, "Y", null, 3],
-      0xb4: [this.load, Mode.ZERO, "Y", "X", 4],
-      0xac: [this.load, Mode.ABS, "Y", null, 4],
-      0xbc: [this.load, Mode.ABS, "Y", "X", 4], //+1 if page crossed
-      0xa9: [this.load, Mode.IMM, "A", null, 2],
-      0xa5: [this.load, Mode.ZERO, "A", null, 3],
-      0xb5: [this.load, Mode.ZERO, "A", "X", 4],
-      0xad: [this.load, Mode.ABS, "A", null, 4],
-      0xbd: [this.load, Mode.ABS, "A", "X", 4],
-      0xb9: [this.load, Mode.ABS, "A", "Y", 4],
-      0xa1: [this.load, Mode.IND, "A", "X", 6],
-      0xb1: [this.load, Mode.IND, "A", "Y", 5],
+      // clears
+      0x18: ["CLC", 1, this.flag, St.CARRY, true],
+      0xd8: ["CLD", 1, this.flag, St.DEC, true],
+      0x58: ["CLI", 1, this.flag, St.INTD, true],
+      0xb8: ["CLV", 1, this.flag, St.OVER, true],
+      // sets
+      0x38: ["SEC", 1, this.flag, St.CARRY, false],
+      0xf8: ["SED", 1, this.flag, St.DEC, false],
+      0x78: ["SEI", 1, this.flag, St.INTD, false],
+      // loads
+      0xa2: ["LDX #$%1", 2, this.load, Mode.IMM, "X", null, 2],
+      0xa6: ["LDX $%1", 2, this.load, Mode.ZERO, "X", null, 3],
+      0xb6: ["LDX $%1,Y", 2, this.load, Mode.ZERO, "X", "Y", 4],
+      0xae: ["LDX $%2%1 = %v", 3, this.load, Mode.ABS, "X", null, 4],
+      0xbe: ["LDX $%2%1,Y = %v", 3, this.load, Mode.ABS, "X", "Y", 4], //+1 if page crossed
+      0xa0: ["LDY #$%1", 2, this.load, Mode.IMM, "Y", null, 2],
+      0xa4: ["LDY $%1", 2, this.load, Mode.ZERO, "Y", null, 3],
+      0xb4: ["LDY $%1,X", 2, this.load, Mode.ZERO, "Y", "X", 4],
+      0xac: ["LDY $%2%1 = %v", 3, this.load, Mode.ABS, "Y", null, 4],
+      0xbc: ["LDY $%2%1,X = %v", 3, this.load, Mode.ABS, "Y", "X", 4], //+1 if page crossed
+      0xa9: ["LDA #$%1", 2, this.load, Mode.IMM, "A", null, 2],
+      0xa5: ["LDA $%1", 2, this.load, Mode.ZERO, "A", null, 3],
+      0xb5: ["LDA $%1,X", 2, this.load, Mode.ZERO, "A", "X", 4],
+      0xad: ["LDA $%2%1 = %v", 3, this.load, Mode.ABS, "A", null, 4],
+      0xbd: ["LDA $%2%1,X = %v", 3, this.load, Mode.ABS, "A", "X", 4],
+      0xb9: ["LDA $%2%1,Y = %v", 3, this.load, Mode.ABS, "A", "Y", 4],
+      0xa1: ["LDA ($%1,X)", 2, this.load, Mode.IND, "A", "X", 6],
+      0xb1: ["LDA ($%1),Y", 2, this.load, Mode.IND, "A", "Y", 5],
 
-      // store
-      0x86: [this.store, Mode.ZERO, "X", null, 3],
-      0x96: [this.store, Mode.ZERO, "X", "Y", 4],
-      0x8e: [this.store, Mode.ABS, "X", null, 4],
-      0x84: [this.store, Mode.ZERO, "Y", null, 3],
-      0x94: [this.store, Mode.ZERO, "Y", "X", 4],
-      0x8c: [this.store, Mode.ABS, "Y", null, 4],
-      0x85: [this.store, Mode.ZERO, "A", null, 3],
-      0x95: [this.store, Mode.ZERO, "A", "X", 4],
-      0x8d: [this.store, Mode.ABS, "A", null, 4],
-      0x9d: [this.store, Mode.ABS, "A", "X", 5],
-      0x99: [this.store, Mode.ABS, "A", "Y", 5],
-      0x81: [this.store, Mode.IND, "A", "X", 6],
-      0x91: [this.store, Mode.IND, "A", "Y", 6],
+      // stores
+      0x86: ["STX $%1 = %v", 2, this.store, Mode.ZERO, "X", null, 3],
+      0x96: ["STX $%1,Y = %v", 2, this.store, Mode.ZERO, "X", "Y", 4],
+      0x8e: ["STX $%2%1 = %v", 3, this.store, Mode.ABS, "X", null, 4],
+      0x84: ["STY $%1 = %v", 2, this.store, Mode.ZERO, "Y", null, 3],
+      0x94: ["STY $%1,X = %v", 2, this.store, Mode.ZERO, "Y", "X", 4],
+      0x8c: ["STY $%2%1 = %v", 2, this.store, Mode.ABS, "Y", null, 4],
+      0x85: ["STA $%1 = %v", 2, this.store, Mode.ZERO, "A", null, 3],
+      0x95: ["STA $%1,X = %v", 2, this.store, Mode.ZERO, "A", "X", 4],
+      0x8d: ["STA $%2%1 = %v", 3, this.store, Mode.ABS, "A", null, 4],
+      0x9d: ["STA $%2%1,X = %v", 3, this.store, Mode.ABS, "A", "X", 5],
+      0x99: ["STA $%2%1,Y = %v", 3, this.store, Mode.ABS, "A", "Y", 5],
+      0x81: ["STA ($%1,X) = %v", 2, this.store, Mode.IND, "A", "X", 6],
+      0x91: ["STA ($%1),Y = %v", 2, this.store, Mode.IND, "A", "Y", 6],
 
-      // tx
-      0xaa: [this.tx, "A", "X"], // tax
-      0xa8: [this.tx, "A", "Y"], // tay
-      0xba: [this.tx, "Stack", "X"], // tsx
-      0x8a: [this.tx, "X", "A"], // txa
-      0x9a: [this.tx, "X", "Stack"], // txs
-      0x98: [this.tx, "Y", "A"], // tya
+      // transfers
+      0xaa: ["TAX", 1, this.tx, "A", "X"],
+      0xa8: ["TAY", 1, this.tx, "A", "Y"],
+      0xba: ["TSX", 1, this.tx, "Stack", "X"],
+      0x8a: ["TXA", 1, this.tx, "X", "A"],
+      0x9a: ["TXS", 1, this.tx, "X", "Stack"],
+      0x98: ["TYA", 1, this.tx, "Y", "A"],
 
-      // jmp, jsr
-      0x4c: [this.jmp, Mode.ABS, 3], // JMP absolute. Sets the program counter to the address specified by the operand.
-      0x6c: [this.jmp, Mode.IND, 5], // JMP indirect. Sets the program counter to the address specified by the operand.
-      0x20: [this.jsr], // JSR. The JSR instruction pushes the address (minus one) of the return point on to the stack and then sets the program counter to the target memory address.
+      // jumps
+      0x4c: ["JMP $%2%1", 3, this.jmp, Mode.ABS, 3], // JMP absolute. Sets the program counter to the address specified by the operand.
+      0x6c: ["JMP ($%2%1)", 3, this.jmp, Mode.IND, 5], // JMP indirect. Sets the program counter to the address specified by the operand.
+      0x20: ["JSR $%2%1", 3, this.jsr], // JSR. The JSR instruction pushes the address (minus one) of the return point on to the stack and then sets the program counter to the target memory address.
 
-      //rti (return from interrupt)
-      0x40: [this.rti], // The RTI instruction is used at the end of an interrupt processing routine. It pulls the processor flags from the stack followed by the program counter.
-
-      //rts (return from subroutine)
-      0x60: [this.rts], // The RTS instruction is used at the end of a subroutine to return to the calling routine. It pulls the program counter (minus one) from the stack.
+      // returns
+      0x40: ["RTI", 1, this.rti], // The RTI instruction is used at the end of an interrupt processing routine. It pulls the processor flags from the stack followed by the program counter.
+      0x60: ["RTS", 1, this.rts], // The RTS instruction is used at the end of a subroutine to return to the calling routine. It pulls the program counter (minus one) from the stack.
 
       //push
-      //PHA: Pushes a copy of the accumulator on to the stack.
-      0x48: [this.push, "A"], //3 cycles
-      //PHP: Pushes a copy of the status flags on to the stack.
-      0x08: [this.push, "Status"], //3 cycles
+      0x48: ["PHA", 1, this.push, "A"],
+      0x08: ["PHP", 1, this.push, "Status"],
 
       //pull
-      //PLA: Pulls an 8 bit value from the stack and into the accumulator. The zero and negative flags are set as appropriate
-      0x68: [this.pull, "A"], //4 cycles
-      //PLP: Pulls an 8 bit value from the stack and into the processor flags. The flags will take on new states as determined by the value pulled.
-      0x28: [this.pull, "Status"], //4 cycles
+      0x68: ["PLA", 1, this.pull, "A"],
+      0x28: ["PLP", 1, this.pull, "Status"],
 
       // branch
-      0x90: [this.branch, St.CARRY, true], // bcc
-      0xb0: [this.branch, St.CARRY, false], // bcs
-      0xd0: [this.branch, St.ZERO, true], // bne
-      0xf0: [this.branch, St.ZERO, false], // beq
-      0x10: [this.branch, St.NEG, true], // bpl
-      0x30: [this.branch, St.NEG, false], // bmi
-      0x50: [this.branch, St.OVER, true], // bvc
-      0x70: [this.branch, St.OVER, false], // bvs
+      0x90: ["BCC $%abs", 2, this.branch, St.CARRY, true],
+      0xb0: ["BCS $%abs", 2, this.branch, St.CARRY, false],
+      0xd0: ["BNE $%abs", 2, this.branch, St.ZERO, true],
+      0xf0: ["BEQ $%abs", 2, this.branch, St.ZERO, false],
+      0x10: ["BPL $%abs", 2, this.branch, St.NEG, true],
+      0x30: ["BMI $%abs", 2, this.branch, St.NEG, false],
+      0x50: ["BVC $%abs", 2, this.branch, St.OVER, true],
+      0x70: ["BVS $%abs", 2, this.branch, St.OVER, false],
 
       // adc
-      0x69: [this.addSub, false, Mode.IMM, null, 2],
-      0x65: [this.addSub, false, Mode.ZERO, null, 3],
-      0x75: [this.addSub, false, Mode.ZERO, "X", 4],
-      0x6d: [this.addSub, false, Mode.ABS, null, 4],
-      0x7d: [this.addSub, false, Mode.ABS, "X", 4], // +1 if page crossed
-      0x79: [this.addSub, false, Mode.ABS, "Y", 4], // +1 if page crossed
-      0x61: [this.addSub, false, Mode.IND, "X", 6],
-      0x71: [this.addSub, false, Mode.IND, "Y", 5], // +1 if page crossed
+      0x69: ["ADC #$%1", 2, this.addSub, false, Mode.IMM, null, 2],
+      0x65: ["ADC $%1", 2, this.addSub, false, Mode.ZERO, null, 3],
+      0x75: ["ADC $%1,X", 2, this.addSub, false, Mode.ZERO, "X", 4],
+      0x6d: ["ADC $%2%1", 3, this.addSub, false, Mode.ABS, null, 4],
+      0x7d: ["ADC $%2%1,X", 3, this.addSub, false, Mode.ABS, "X", 4], // +1 if page crossed
+      0x79: ["ADC $%2%1,Y", 3, this.addSub, false, Mode.ABS, "Y", 4], // +1 if page crossed
+      0x61: ["ADC ($%1,X)", 2, this.addSub, false, Mode.IND, "X", 6],
+      0x71: ["ADC ($%1),Y", 2, this.addSub, false, Mode.IND, "Y", 5], // +1 if page crossed
 
       // sbc
-      0xe9: [this.addSub, true, Mode.IMM, null, 2],
-      0xe5: [this.addSub, true, Mode.ZERO, null, 3],
-      0xf5: [this.addSub, true, Mode.ZERO, "X", 4],
-      0xed: [this.addSub, true, Mode.ABS, null, 4],
-      0xfd: [this.addSub, true, Mode.ABS, "X", 4], // +1 if page crossed
-      0xf9: [this.addSub, true, Mode.ABS, "Y", 4], // +1 if page crossed
-      0xe1: [this.addSub, true, Mode.IND, "X", 6],
-      0xf1: [this.addSub, true, Mode.IND, "Y", 5], // +1 if page crossed
+      0xe9: ["SBC #$%1", 2, this.addSub, true, Mode.IMM, null, 2],
+      0xe5: ["SBC $%1", 2, this.addSub, true, Mode.ZERO, null, 3],
+      0xf5: ["SBC $%1,X", 2, this.addSub, true, Mode.ZERO, "X", 4],
+      0xed: ["SBC $%2%1", 3, this.addSub, true, Mode.ABS, null, 4],
+      0xfd: ["SBC $%2%1,X", 3, this.addSub, true, Mode.ABS, "X", 4], // +1 if page crossed
+      0xf9: ["SBC $%2%1,Y", 3, this.addSub, true, Mode.ABS, "Y", 4], // +1 if page crossed
+      0xe1: ["SBC ($%1,X)", 2, this.addSub, true, Mode.IND, "X", 6],
+      0xf1: ["SBC ($%1),Y", 2, this.addSub, true, Mode.IND, "Y", 5], // +1 if page crossed
 
-      // and
-      0x29: [this.and, Mode.IMM, null, 2],
-      0x25: [this.and, Mode.ZERO, null, 3],
-      0x35: [this.and, Mode.ZERO, "X", 4],
-      0x2d: [this.and, Mode.ABS, null, 4],
-      0x3d: [this.and, Mode.ABS, "X", 4], // +1 if page crossed
-      0x39: [this.and, Mode.ABS, "Y", 4], // +1 if page crossed
-      0x21: [this.and, Mode.IND, "X", 6],
-      0x31: [this.and, Mode.IND, "Y", 5], // +1 if page crossed
-      // eor (xor)
-      0x49: [this.xor, Mode.IMM, null, 2],
-      0x45: [this.xor, Mode.ZERO, null, 3],
-      0x55: [this.xor, Mode.ZERO, "X", 4],
-      0x4d: [this.xor, Mode.ABS, null, 4],
-      0x5d: [this.xor, Mode.ABS, "X", 4], // +1 if page crossed
-      0x59: [this.xor, Mode.ABS, "Y", 4], // +1 if page crossed
-      0x41: [this.xor, Mode.IND, "X", 6],
-      0x51: [this.xor, Mode.IND, "Y", 5], // +1 if page crossed
-      // ora
-      0x09: [this.or, Mode.IMM, null, 2],
-      0x05: [this.or, Mode.ZERO, null, 3],
-      0x15: [this.or, Mode.ZERO, "X", 4],
-      0x0d: [this.or, Mode.ABS, null, 4],
-      0x1d: [this.or, Mode.ABS, "X", 4], // +1 if page crossed
-      0x19: [this.or, Mode.ABS, "Y", 4], // +1 if page crossed
-      0x01: [this.or, Mode.IND, "X", 6],
-      0x11: [this.or, Mode.IND, "Y", 5], // +1 if page crossed
+      // logical
+      0x29: ["AND #$%1", 2, this.and, Mode.IMM, null, 2],
+      0x25: ["AND $%1", 2, this.and, Mode.ZERO, null, 3],
+      0x35: ["AND $%1,X", 2, this.and, Mode.ZERO, "X", 4],
+      0x2d: ["AND $%2%1", 3, this.and, Mode.ABS, null, 4],
+      0x3d: ["AND $%2%1,X", 3, this.and, Mode.ABS, "X", 4], // +1 if page crossed
+      0x39: ["AND $%2%1,Y", 3, this.and, Mode.ABS, "Y", 4], // +1 if page crossed
+      0x21: ["AND ($%1,X)", 2, this.and, Mode.IND, "X", 6],
+      0x31: ["AND ($%1),Y", 2, this.and, Mode.IND, "Y", 5], // +1 if page crossed
+      0x49: ["EOR #$%1", 2, this.xor, Mode.IMM, null, 2],
+      0x45: ["EOR $%1", 2, this.xor, Mode.ZERO, null, 3],
+      0x55: ["EOR $%1,X", 2, this.xor, Mode.ZERO, "X", 4],
+      0x4d: ["EOR $%2%1", 3, this.xor, Mode.ABS, null, 4],
+      0x5d: ["EOR $%2%1,X", 3, this.xor, Mode.ABS, "X", 4], // +1 if page crossed
+      0x59: ["EOR $%2%1,Y", 3, this.xor, Mode.ABS, "Y", 4], // +1 if page crossed
+      0x41: ["EOR ($%1,X)", 2, this.xor, Mode.IND, "X", 6],
+      0x51: ["EOR ($%1),Y", 2, this.xor, Mode.IND, "Y", 5], // +1 if page crossed
+      0x09: ["ORA #$%1", 2, this.or, Mode.IMM, null, 2],
+      0x05: ["ORA $%1", 2, this.or, Mode.ZERO, null, 3],
+      0x15: ["ORA $%1,X", 2, this.or, Mode.ZERO, "X", 4],
+      0x0d: ["ORA $%2%1", 3, this.or, Mode.ABS, null, 4],
+      0x1d: ["ORA $%2%1,X", 3, this.or, Mode.ABS, "X", 4], // +1 if page crossed
+      0x19: ["ORA $%2%1,Y", 3, this.or, Mode.ABS, "Y", 4], // +1 if page crossed
+      0x01: ["ORA ($%1,X)", 2, this.or, Mode.IND, "X", 6],
+      0x11: ["ORA ($%1),Y", 2, this.or, Mode.IND, "Y", 5], // +1 if page crossed
 
-      // cmp
-      0xc9: [this.cmp, Mode.IMM, "A", null, 2], //IMM. 2 cyc
-      0xc5: [this.cmp, Mode.ZERO, "A", null, 3], //zero page. 3 cyc
-      0xd5: [this.cmp, Mode.ZERO, "A", "X", 4], //zero page, X
-      0xcd: [this.cmp, Mode.ABS, "A", null, 4], //ABS
-      0xdd: [this.cmp, Mode.ABS, "A", "X", 4], //ABS, X +1 cycle if page cross
-      0xd9: [this.cmp, Mode.ABS, "A", "Y", 4], //ABS, Y +1 cycle if page cross
-      0xc1: [this.cmp, Mode.IND, "A", "X", 6], //IND, X
-      0xd1: [this.cmp, Mode.IND, "A", "Y", 5], //IND, Y +1 cycle if page cross
+      // comparison
+      0xc9: ["CMP #$%1", 2, this.cmp, Mode.IMM, "A", null, 2], //IMM. 2 cyc
+      0xc5: ["CMP $%1", 2, this.cmp, Mode.ZERO, "A", null, 3], //zero page. 3 cyc
+      0xd5: ["CMP $%1,X", 2, this.cmp, Mode.ZERO, "A", "X", 4], //zero page, X
+      0xcd: ["CMP $%2%1", 3, this.cmp, Mode.ABS, "A", null, 4], //ABS
+      0xdd: ["CMP $%2%1,X", 3, this.cmp, Mode.ABS, "A", "X", 4], //ABS, X +1 cycle if page cross
+      0xd9: ["CMP $%2%1,Y", 3, this.cmp, Mode.ABS, "A", "Y", 4], //ABS, Y +1 cycle if page cross
+      0xc1: ["CMP ($%1,X)", 2, this.cmp, Mode.IND, "A", "X", 6], //IND, X
+      0xd1: ["CMP ($%1),Y", 2, this.cmp, Mode.IND, "A", "Y", 5], //IND, Y +1 cycle if page cross
       //cpx
-      0xe0: [this.cmp, Mode.IMM, "X", null, 2], //IMM, compare X with another value
-      0xe4: [this.cmp, Mode.ZERO, "X", null, 3], //ZERO, compare X with another value
-      0xec: [this.cmp, Mode.ABS, "X", null, 4], //ABS, compare X with another value
+      0xe0: ["CPX #$%1", 2, this.cmp, Mode.IMM, "X", null, 2], //IMM, compare X with another value
+      0xe4: ["CPX $%1", 2, this.cmp, Mode.ZERO, "X", null, 3], //ZERO, compare X with another value
+      0xec: ["CPX $%2%1", 3, this.cmp, Mode.ABS, "X", null, 4], //ABS, compare X with another value
       //cpy
-      0xc0: [this.cmp, Mode.IMM, "Y", null, 2], //IMM, compare Y with another value
-      0xc4: [this.cmp, Mode.ZERO, "Y", null, 3], //ZERO, compare Y with another value
-      0xcc: [this.cmp, Mode.ABS, "Y", null, 4], //ABS, compare Y with another value
+      0xc0: ["CPY #$%1", 2, this.cmp, Mode.IMM, "Y", null, 2], //IMM, compare Y with another value
+      0xc4: ["CPY $%1", 2, this.cmp, Mode.ZERO, "Y", null, 3], //ZERO, compare Y with another value
+      0xcc: ["CPY $%2%1", 3, this.cmp, Mode.ABS, "Y", null, 4], //ABS, compare Y with another value
 
-      // asl
-      0x0a: [this.log, this.asl, Mode.ACC, null, 2],
-      0x06: [this.log, this.asl, Mode.ZERO, null, 5],
-      0x16: [this.log, this.asl, Mode.ZERO, "X", 6],
-      0x0e: [this.log, this.asl, Mode.ABS, null, 6],
-      0x1e: [this.log, this.asl, Mode.ABS, "X", 7],
-      // lsr
-      0x4a: [this.log, this.lsr, Mode.ACC, null, 2],
-      0x46: [this.log, this.lsr, Mode.ZERO, null, 5],
-      0x56: [this.log, this.lsr, Mode.ZERO, "X", 6],
-      0x4e: [this.log, this.lsr, Mode.ABS, null, 6],
-      0x5e: [this.log, this.lsr, Mode.ABS, "X", 7],
-      // rol
-      0x2a: [this.log, this.rol, Mode.ACC, null, 2],
-      0x26: [this.log, this.rol, Mode.ZERO, null, 5],
-      0x36: [this.log, this.rol, Mode.ZERO, "X", 6],
-      0x2e: [this.log, this.rol, Mode.ABS, null, 6],
-      0x3e: [this.log, this.rol, Mode.ABS, "X", 7],
-      // ror
-      0x6a: [this.log, this.ror, Mode.ACC, null, 2],
-      0x66: [this.log, this.ror, Mode.ZERO, null, 5],
-      0x76: [this.log, this.ror, Mode.ZERO, "X", 6],
-      0x6e: [this.log, this.ror, Mode.ABS, null, 6],
-      0x7e: [this.log, this.ror, Mode.ABS, "X", 7],
+      // shifts
+      0x0a: ["ASL A", 1, this.shift, this.asl, Mode.ACC, null, 2],
+      0x06: ["ASL $%1", 2, this.shift, this.asl, Mode.ZERO, null, 5],
+      0x16: ["ASL $%1,X", 2, this.shift, this.asl, Mode.ZERO, "X", 6],
+      0x0e: ["ASL $%2%1", 3, this.shift, this.asl, Mode.ABS, null, 6],
+      0x1e: ["ASL $%2%1,X", 3, this.shift, this.asl, Mode.ABS, "X", 7],
+      0x4a: ["LSR A", 1, this.shift, this.lsr, Mode.ACC, null, 2],
+      0x46: ["LSR $%1", 2, this.shift, this.lsr, Mode.ZERO, null, 5],
+      0x56: ["LSR $%1,X", 2, this.shift, this.lsr, Mode.ZERO, "X", 6],
+      0x4e: ["LSR $%2%1", 3, this.shift, this.lsr, Mode.ABS, null, 6],
+      0x5e: ["LSR $%2%1,X", 3, this.shift, this.lsr, Mode.ABS, "X", 7],
+      0x2a: ["ROL A", 1, this.shift, this.rol, Mode.ACC, null, 2],
+      0x26: ["ROL $%1", 2, this.shift, this.rol, Mode.ZERO, null, 5],
+      0x36: ["ROL $%1,X", 2, this.shift, this.rol, Mode.ZERO, "X", 6],
+      0x2e: ["ROL $%2%1", 3, this.shift, this.rol, Mode.ABS, null, 6],
+      0x3e: ["ROL $%2%1,X", 3, this.shift, this.rol, Mode.ABS, "X", 7],
+      0x6a: ["ROR A", 1, this.shift, this.ror, Mode.ACC, null, 2],
+      0x66: ["ROR $%1", 2, this.shift, this.ror, Mode.ZERO, null, 5],
+      0x76: ["ROR $%1", 2, this.shift, this.ror, Mode.ZERO, "X", 6],
+      0x6e: ["ROR $%2%1,X", 3, this.shift, this.ror, Mode.ABS, null, 6],
+      0x7e: ["ROR $%2%1,X", 3, this.shift, this.ror, Mode.ABS, "X", 7],
 
       // inc/dec
-      0xe6: [this.incDec, Mode.ZERO, true, null, 5],
-      0xf6: [this.incDec, Mode.ZERO, true, "X", 6],
-      0xee: [this.incDec, Mode.ABS, true, null, 6],
-      0xfe: [this.incDec, Mode.ABS, true, "X", 7],
-      0xc6: [this.incDec, Mode.ZERO, false, null, 5],
-      0xd6: [this.incDec, Mode.ZERO, false, "X", 6],
-      0xce: [this.incDec, Mode.ABS, false, null, 6],
-      0xde: [this.incDec, Mode.ABS, false, "X", 7],
-      0xe8: [this.incReg, "X"], // inx
-      0xc8: [this.incReg, "Y"], // iny
-      0xca: [this.decReg, "X"], // dex
-      0x88: [this.decReg, "Y"], // dey
+      0xe6: ["INC $%1", 2, this.incDec, Mode.ZERO, true, null, 5],
+      0xf6: ["INC $%1,X", 2, this.incDec, Mode.ZERO, true, "X", 6],
+      0xee: ["INC $%2%1", 3, this.incDec, Mode.ABS, true, null, 6],
+      0xfe: ["INC $%2%1,X", 3, this.incDec, Mode.ABS, true, "X", 7],
+      0xc6: ["DEC $%1", 2, this.incDec, Mode.ZERO, false, null, 5],
+      0xd6: ["DEC $%1,X", 2, this.incDec, Mode.ZERO, false, "X", 6],
+      0xce: ["DEC $%2%1", 3, this.incDec, Mode.ABS, false, null, 6],
+      0xde: ["DEC $%2%1,X", 3, this.incDec, Mode.ABS, false, "X", 7],
+      0xe8: ["INX", 1, this.incReg, "X"],
+      0xc8: ["INY", 1, this.incReg, "Y"],
+      0xca: ["DEX", 1, this.decReg, "X"],
+      0x88: ["DEY", 1, this.decReg, "Y"],
 
       // need to add rest of instructions from http://www.obelisk.me.uk/6502/reference.html#STX -- Ox is $
     };
   }
 
   reset() {
+    this.addr = 0; // stores last memory address location
+    this.last = 0; // stores value of last memory address location
     this.A = 0x00; // 8-bit accumulator
     this.X = 0x00; // 8-bit x register
     this.Y = 0x00; // 8-bit y register
@@ -230,6 +218,14 @@ class Nes6502 {
     // emulate the interrupt handling code
     this.Stack = 0xfd; // 8-bit stack
     this.cycles = 7;
+  }
+
+  store_log_vars(addr) {
+    this.addr = addr;
+    this.last = this.read(addr);
+    if (this.last === undefined) {
+      console.log("WHOOPS at ", addr);
+    }
   }
 
   setStatus(flag) {
@@ -301,25 +297,36 @@ class Nes6502 {
     } else {
       [addr, extra] = this.calcAddress(mode, off);
     }
+    this.store_log_vars(addr);
     return [this.read(addr), extra];
   }
 
   addSub(sub, mode, off, cycles) {
-    let [val, extra] = this.getVal(mode, off);
-    console.log(val);
     // the carry flag is bit 0 so we can use the value directly
-    if (sub) {
-      val ^= 0xff;
-    }
-    let sum = this.A + val + (this.Status & St.CARRY);
-    this.setFlags(sum);
-
-    // Overflow Flag Set if sign bit is incorrect
-    // check if this val is correct for sub
-    if ((this.A ^ sum) & (val ^ sum) & 0x80) {
+    let carry = this.Status & St.CARRY;
+    let [res, over, extra] = this.addSubImpl(sub, mode, "A", off, carry);
+    this.A = res;
+    if (over) {
       this.setStatus(St.OVER);
     } else {
       this.clearStatus(St.OVER);
+    }
+    return cycles + extra;
+  }
+
+  // split into function so it can be used by cmp as well
+  addSubImpl(sub, mode, tgt, off, carry) {
+    let [val, extra] = this.getVal(mode, off);
+    if (sub) {
+      val = val ^ 0xff;
+    }
+    let sum = this[tgt] + val + carry;
+    let over = false;
+
+    // Overflow Flag Set if sign bit is incorrect
+    // check if this val is correct for sub
+    if ((this[tgt] ^ sum) & (val ^ sum) & 0x80) {
+      over = true;
     }
 
     // Carry Set if value over 8 bits.
@@ -329,8 +336,9 @@ class Nes6502 {
       this.clearStatus(St.CARRY);
     }
 
-    this.A = sum & 0xff;
-    return cycles + extra;
+    let res = sum & 0xff;
+    this.setFlags(res);
+    return [res, over, extra];
   }
 
   bit(mode, cycles) {
@@ -366,7 +374,7 @@ class Nes6502 {
     return cycles + extra;
   }
 
-  log(mode, opfn, off, cycles) {
+  shift(opfn, mode, off, cycles) {
     let addr = 0;
     let val = 0;
     if (mode == Mode.ACC) {
@@ -423,28 +431,7 @@ class Nes6502 {
   }
 
   cmp(mode, tgt, off, cycles) {
-    let [val, extra] = this.getVal(mode, off);
-
-    // Zero Flag Set if tgt = val
-    if (this[tgt] == val) {
-      this.setStatus(St.ZERO);
-    } else {
-      this.clearStatus(St.ZERO);
-    }
-    // 0x80 the top bit  is 10000000b
-    // Negative Flag	Set if bit 7 set
-    if (val & 0x80) {
-      this.setStatus(St.NEG);
-    } else {
-      this.clearStatus(St.NEG);
-    }
-    // Carry Set if tgt >= val.
-    if (this[tgt] >= val) {
-      this.setStatus(St.CARRY);
-    } else {
-      this.clearStatus(St.CARRY);
-    }
-
+    let [, , extra] = this.addSubImpl(true, mode, tgt, off, 1);
     return cycles + extra;
   }
 
@@ -463,14 +450,14 @@ class Nes6502 {
 
   incReg(reg) {
     // Adds one to the register setting the zero and negative flags as appropriate.
-    this[reg]++;
+    this[reg] = ++this[reg] & 0xff;
     this.setFlags(this[reg]);
     return 2;
   }
 
   decReg(reg) {
     // Subtracts one from the register setting the zero and negative flags as appropriate.
-    this[reg]--;
+    this[reg] = --this[reg] & 0xff;
     this.setFlags(this[reg]);
     return 2;
   }
@@ -479,22 +466,32 @@ class Nes6502 {
     this[destination] = this[source];
     if (destination != "Stack") {
       //TXS is only one that says not to set flags.
-      this.setFlags(destination);
+      this.setFlags(this[destination]);
     }
     return 2;
   }
 
   push(source) {
-    this.write(0x100 | this.Stack, this[source]);
+    let val = this[source];
+    if (source == "Status") {
+      // always set break and un
+      val |= 0x30;
+    }
+    this.write(0x100 | this.Stack, val);
     this.Stack--;
     return 3;
   }
 
   pull(source) {
     this.Stack++;
-    this[source] = this.read(0x100 | this.Stack);
+    let val = this.read(0x100 | this.Stack);
+    if (source == "Status") {
+      // always set break and un
+      val = (val & 0xcf) | (this[source] & 0x30);
+    }
+    this[source] = val;
     if (source == "A") {
-      this.setFlags(source);
+      this.setFlags(this[source]);
     }
     return 4;
   }
@@ -513,6 +510,7 @@ class Nes6502 {
       let hi = this.read(second);
       addr = (hi << 8) | lo;
     }
+    this.store_log_vars(addr);
     this.PC = addr;
     return cycles;
   }
@@ -529,18 +527,23 @@ class Nes6502 {
   }
 
   rti() {
-    this.pull("Status", 6);
-    return this.rts();
+    this.pull("Status");
+    // the pc is the actual jump address
+    return this.jump_stack(0);
   }
 
   rts() {
+    // the stack points to the last byte of the jsr address
+    // so increment it by one when setting pc
+    return this.jump_stack(1);
+  }
+
+  jump_stack(offset) {
     this.Stack++;
     let lo = this.read(0x100 | this.Stack);
     this.Stack++;
     let hi = this.read(0x100 | this.Stack);
-    // the stack points to the last byte of the jsr address
-    // so increment it by one when setting pc
-    this.PC = ((hi << 8) | lo) + 1;
+    this.PC = ((hi << 8) | lo) + offset;
     return 6;
   }
 
@@ -560,18 +563,20 @@ class Nes6502 {
   branch(flag, invert) {
     // read the offset
     let lo = this.read(this.PC);
+    if (lo > 127) {
+      lo -= 256;
+    }
     this.PC++;
     let cycles = 2;
+    let addr = this.PC;
+    addr += lo;
+    this.store_log_vars(addr);
     if (this.getStatus(flag) ^ invert) {
       cycles += 1; // if branch succeeds +1
-      if (lo > 127) {
-        lo -= 256;
-      }
-      let hi = this.PC >> 8;
-      this.PC += lo;
-      if (this.PC >> 8 != hi) {
+      if (addr >> 8 != this.PC >> 8) {
         cycles += 1; // if new page +1
       }
+      this.PC = addr;
     }
     return cycles;
   }
@@ -623,43 +628,39 @@ class Nes6502 {
         }
         break;
     }
+    // save the memory at current address for logging
+    this.store_log_vars(addr);
     return [addr, extra];
   }
 
-  execute(ins) {
-    let parts = this.lookup[ins];
-    if (parts !== undefined) {
-      console.log(ins);
-      console.log(parts);
-      let [fn, ...args] = parts;
-      return fn.apply(this, args);
+  log_ins(mne, len) {
+    let ins = ["  ", "  ", "  "];
+    for (let i = 0; i < len; i++) {
+      ins[i] = toHex8(this.read(this.PC + i));
     }
-    console.log("unknown instruction");
-    process.exit(1);
+    let pc = toHex16(this.PC);
+    mne = mne.replace("%1", ins[1]).replace("%2", ins[2]).padEnd(32);
+    let log = `${pc}  ${ins[0]} ${ins[1]} ${ins[2]}  ${mne}`;
+    log += `A:${toHex8(this.A)} X:${toHex8(this.X)} Y:${toHex8(this.Y)} `;
+    log += `P:${toHex8(this.Status)} SP:${toHex8(this.Stack)} `;
+    log += `PPU:  0,  0 CYC:${this.cycles}`;
+    return log;
   }
 
   clock() {
-    let ins = this.read(this.PC);
-    let log =
-      toHex16(this.PC) +
-      " " +
-      toHex8(ins) +
-      " A: " +
-      toHex8(this.A) +
-      " X: " +
-      toHex8(this.X) +
-      " Y: " +
-      toHex8(this.Y) +
-      " P: " +
-      toHex8(this.Status) +
-      " SP: " +
-      toHex8(this.Stack) +
-      " CYC: " +
-      this.cycles +
-      "\n";
-    fs.appendFileSync(LOG, log);
+    let parts = this.lookup[this.read(this.PC)];
+    if (parts === undefined) {
+      console.log("unknown instruction");
+      process.exit(1);
+    }
+    let [mne, len, fn, ...args] = parts;
+    let ret = this.log_ins(mne, len);
     this.PC++;
-    this.cycles += this.execute(ins);
+    this.cycles += fn.apply(this, args);
+    // write calculated values
+    ret = ret.replace("%abs", toHex16(this.addr));
+    ret = ret.replace("%v", toHex8(this.last));
+    return ret;
   }
 }
 
@@ -668,10 +669,10 @@ const St = {
   ZERO: 1 << 1,
   INTD: 1 << 2,
   DEC: 1 << 3,
-  BREAK: 1 << 4,
-  UN: 1 << 5,
-  OVER: 1 << 6,
-  NEG: 1 << 7,
+  BREAK: 1 << 4, // 1
+  UN: 1 << 5, // 2
+  OVER: 1 << 6, // 4
+  NEG: 1 << 7, // 8
 };
 
 const Mode = {

@@ -3,7 +3,7 @@ const Cart = require("./cart");
 class Bus {
   constructor(input) {
     this.input = input;
-    this.ram = new Uint8Array(0x07ff);
+    this.ram = new Uint8Array(0x0800);
   }
 
   loadRom(file) {
