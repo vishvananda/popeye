@@ -9,7 +9,6 @@ function toHex16(val) {
 class Nes6502 {
   constructor(bus) {
     this.bus = bus;
-    this.reset();
     this.lookup = {
       // nop
       0xea: [this.nop],

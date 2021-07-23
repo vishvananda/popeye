@@ -74,8 +74,8 @@ function dump() {
   const length = 3 * 16;
   var offset = 0x0000;
   console.log(hexdump(buf, offset, length));
-  offset = 0x8000;
-  const buf2 = Buffer.from(bus.rom);
+  offset = bus.cart.prg_offset(cpu.PC) & 0xfff0;
+  const buf2 = Buffer.from(bus.cart.prg);
   console.log(hexdump(buf2, offset, length));
 }
 
@@ -98,49 +98,13 @@ function handleKey(key) {
   return true;
 }
 
-function loadProgram() {
-  // Load Program (assembled at https://www.masswerk.at/6502/assembler.html)
-  // *=$8000
-  // LDX #10
-  // STX $0000
-  // LDX #3
-  // STX $0001
-  // LDY $0000
-  // LDA #0
-  // CLC
-  // loop
-  // ADC $0001
-  // DEY
-  // BNE loop
-  // STA $0002
-  // NOP
-  // NOP
-  // NOP
-
-  // Convert hex string into bytes for RAM
-  var code =
-    "A2 0A 8E 00 00 A2 03 8E 01 00 AC 00 00 A9 00 18 6D 01 00 88 D0 FA 8D 02 00 EA EA EA";
-  code = code.split(" ");
-  var offset = 0x8000;
-  code.forEach(function (val) {
-    bus.rom[offset++] = parseInt(val, 16); // code converted to number from hex string
-  });
-
-  // Set Reset Vector
-  bus.rom[0xfffc] = 0x00;
-  bus.rom[0xfffd] = 0x80;
-
-  // Reset
-  cpu.reset();
-  return true;
-}
-
 const io = new IO(w, h);
 const input = new Input(io);
 const bus = new Bus(input);
 const cpu = new Cpu(bus);
 io.registerKeyPressHandler(handleKey);
-loadProgram();
+bus.loadRom("nestest.nes");
+cpu.reset();
 dump();
 run();
 
