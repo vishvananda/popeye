@@ -3,6 +3,9 @@ const fs = require("fs");
 function toHex8(val) {
   return ("00" + val.toString(16).toUpperCase()).slice(-2);
 }
+function toHex16(val) {
+  return ("0000" + val.toString(16).toUpperCase()).slice(-4);
+}
 class Nes6502 {
   constructor(bus) {
     this.bus = bus;
@@ -632,7 +635,7 @@ class Nes6502 {
     this.PC++;
     this.cycles += this.execute(ins);
     this.log +=
-      toHex8(this.PC) +
+      toHex16(this.PC) +
       " " +
       toHex8(ins) +
       " A: " +
