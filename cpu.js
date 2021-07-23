@@ -101,40 +101,24 @@ class Nes6502 {
       0x70: ["BVS $%abs", 2, this.branch, St.OVER, false],
 
       // adc
-      0x69: ["ADC #$%1", 2, this.addSub, false, Mode.IMM, null, 2],
-      0x65: ["ADC $%1 = %v", 2, this.addSub, false, Mode.ZERO, null, 3],
-      0x75: ["ADC $%1,X @ %r = %v", 2, this.addSub, false, Mode.ZERO, "X", 4],
-      0x6d: ["ADC $%2%1 = %v", 3, this.addSub, false, Mode.ABS, null, 4],
-      0x7d: [
-        "ADC $%2%1,X @ %abs = %v",
-        3,
-        this.addSub,
-        false,
-        Mode.ABS,
-        "X",
-        4,
-      ], // +1 if page crossed
-      0x79: [
-        "ADC $%2%1,Y @ %abs = %v",
-        3,
-        this.addSub,
-        false,
-        Mode.ABS,
-        "Y",
-        4,
-      ], // +1 if page crossed
-      0x61: [`ADC ${indx}`, 2, this.addSub, false, Mode.IND, "X", 6],
-      0x71: [`ADC ${indy}`, 2, this.addSub, false, Mode.IND, "Y", 5], // +1 if page crossed
+      0x69: ["ADC #$%1", 2, this.add, false, Mode.IMM, null, 2],
+      0x65: ["ADC $%1 = %v", 2, this.add, false, Mode.ZERO, null, 3],
+      0x75: ["ADC $%1,X @ %r = %v", 2, this.add, false, Mode.ZERO, "X", 4],
+      0x6d: ["ADC $%2%1 = %v", 3, this.add, false, Mode.ABS, null, 4],
+      0x7d: ["ADC $%2%1,X @ %abs = %v", 3, this.add, false, Mode.ABS, "X", 4], // +1 if page crossed
+      0x79: ["ADC $%2%1,Y @ %abs = %v", 3, this.add, false, Mode.ABS, "Y", 4], // +1 if page crossed
+      0x61: [`ADC ${indx}`, 2, this.add, false, Mode.IND, "X", 6],
+      0x71: [`ADC ${indy}`, 2, this.add, false, Mode.IND, "Y", 5], // +1 if page crossed
 
       // sbc
-      0xe9: ["SBC #$%1", 2, this.addSub, true, Mode.IMM, null, 2],
-      0xe5: ["SBC $%1 = %v", 2, this.addSub, true, Mode.ZERO, null, 3],
-      0xf5: ["SBC $%1,X @ %r = %v", 2, this.addSub, true, Mode.ZERO, "X", 4],
-      0xed: ["SBC $%2%1 = %v", 3, this.addSub, true, Mode.ABS, null, 4],
-      0xfd: ["SBC $%2%1,X @ %abs = %v", 3, this.addSub, true, Mode.ABS, "X", 4], // +1 if page crossed
-      0xf9: ["SBC $%2%1,Y @ %abs = %v", 3, this.addSub, true, Mode.ABS, "Y", 4], // +1 if page crossed
-      0xe1: [`SBC ${indx}`, 2, this.addSub, true, Mode.IND, "X", 6],
-      0xf1: [`SBC ${indy}`, 2, this.addSub, true, Mode.IND, "Y", 5], // +1 if page crossed
+      0xe9: ["SBC #$%1", 2, this.add, true, Mode.IMM, null, 2],
+      0xe5: ["SBC $%1 = %v", 2, this.add, true, Mode.ZERO, null, 3],
+      0xf5: ["SBC $%1,X @ %r = %v", 2, this.add, true, Mode.ZERO, "X", 4],
+      0xed: ["SBC $%2%1 = %v", 3, this.add, true, Mode.ABS, null, 4],
+      0xfd: ["SBC $%2%1,X @ %abs = %v", 3, this.add, true, Mode.ABS, "X", 4], // +1 if page crossed
+      0xf9: ["SBC $%2%1,Y @ %abs = %v", 3, this.add, true, Mode.ABS, "Y", 4], // +1 if page crossed
+      0xe1: [`SBC ${indx}`, 2, this.add, true, Mode.IND, "X", 6],
+      0xf1: [`SBC ${indy}`, 2, this.add, true, Mode.IND, "Y", 5], // +1 if page crossed
 
       // logical
       0x29: ["AND #$%1", 2, this.and, Mode.IMM, null, 2],
@@ -320,10 +304,10 @@ class Nes6502 {
     return [this.read(addr), extra];
   }
 
-  addSub(sub, mode, off, cycles) {
+  add(sub, mode, off, cycles) {
     // the carry flag is bit 0 so we can use the value directly
     let carry = this.Status & St.CARRY;
-    let [res, over, extra] = this.addSubImpl(sub, mode, "A", off, carry);
+    let [res, over, extra] = this.addImpl(sub, mode, "A", off, carry);
     this.A = res;
     if (over) {
       this.setStatus(St.OVER);
@@ -334,7 +318,7 @@ class Nes6502 {
   }
 
   // split into function so it can be used by cmp as well
-  addSubImpl(sub, mode, tgt, off, carry) {
+  addImpl(sub, mode, tgt, off, carry) {
     let [val, extra] = this.getVal(mode, off);
     if (sub) {
       val = val ^ 0xff;
@@ -450,7 +434,7 @@ class Nes6502 {
   }
 
   cmp(mode, tgt, off, cycles) {
-    let [, , extra] = this.addSubImpl(true, mode, tgt, off, 1);
+    let [, , extra] = this.addImpl(true, mode, tgt, off, 1);
     return cycles + extra;
   }
 
