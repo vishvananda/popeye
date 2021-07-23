@@ -3,12 +3,10 @@ const IO = require("./io");
 const Cpu = require("./cpu");
 const Bus = require("./bus");
 const Input = require("./input");
-const fs = require("fs");
 
 var c = 0;
 function run() {
   if (io.shouldClose || io.getKey(glfw.KEY_ESCAPE)) {
-    fs.writeFileSync("logtest.txt", cpu.log);
     io.shutdown();
     process.exit(0);
   }
@@ -74,6 +72,8 @@ function dump() {
   const length = 3 * 16;
   var offset = 0x0000;
   console.log(hexdump(buf, offset, length));
+  offset = 0x01d0;
+  console.log(hexdump(buf, offset, length));
   offset = bus.cart.prg_offset(cpu.PC) & 0xfff0;
   const buf2 = Buffer.from(bus.cart.prg);
   console.log(hexdump(buf2, offset, length));
@@ -105,6 +105,8 @@ const cpu = new Cpu(bus);
 io.registerKeyPressHandler(handleKey);
 bus.loadRom("nestest.nes");
 cpu.reset();
+// force automation mode
+cpu.PC = 0xc000;
 dump();
 run();
 

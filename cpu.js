@@ -6,8 +6,11 @@ function toHex8(val) {
 function toHex16(val) {
   return ("0000" + val.toString(16).toUpperCase()).slice(-4);
 }
+
+const LOG = "logtest.txt";
 class Nes6502 {
   constructor(bus) {
+    fs.writeFileSync(LOG, "");
     this.bus = bus;
     this.lookup = {
       // nop
@@ -217,16 +220,16 @@ class Nes6502 {
     this.A = 0x00; // 8-bit accumulator
     this.X = 0x00; // 8-bit x register
     this.Y = 0x00; // 8-bit y register
-    this.Stack = 0xff; // 8-bit stack
-    this.Status = 0x00 | St.UN; // 8-bit flags
+    this.Status = 0x00 | St.UN | St.INTD; // 8-bit flags
 
     let abs = 0xfffc;
     let lo = this.read(abs + 0);
     let hi = this.read(abs + 1);
     this.PC = (hi << 8) | lo; // 16-bit program counter
 
-    this.log = "";
-    this.cycles = 0;
+    // emulate the interrupt handling code
+    this.Stack = 0xfd; // 8-bit stack
+    this.cycles = 7;
   }
 
   setStatus(flag) {
@@ -265,11 +268,13 @@ class Nes6502 {
   load(mode, tgt, off, cycles) {
     if (mode == Mode.IMM) {
       this[tgt] = this.read(this.PC);
+      this.setFlags(this[tgt]);
       this.PC++;
       return cycles;
     }
     let [addr, extra] = this.calcAddress(mode, off);
     this[tgt] = this.read(addr);
+    this.setFlags(this[tgt]);
     return cycles + extra;
   }
 
@@ -328,11 +333,12 @@ class Nes6502 {
     return cycles + extra;
   }
 
-  bit(mode, off, cycles) {
-    let [val, ,] = this.getVal(mode, off);
+  bit(mode, cycles) {
+    let [val, ,] = this.getVal(mode, null);
     // the carry flag is bit 0 so we can use the value directly
     let tmp = this.A & val;
     this.setFlags(tmp);
+    this.Status = (this.Status & 0x3f) | (val & 0xc0);
     return cycles;
   }
 
@@ -479,14 +485,14 @@ class Nes6502 {
   }
 
   push(source) {
-    this.write(0x100 & this.Stack, this[source]);
+    this.write(0x100 | this.Stack, this[source]);
     this.Stack--;
     return 3;
   }
 
   pull(source) {
     this.Stack++;
-    this[source] = this.read(0x100 & this.Stack);
+    this[source] = this.read(0x100 | this.Stack);
     if (source == "A") {
       this.setFlags(source);
     }
@@ -512,10 +518,12 @@ class Nes6502 {
   }
 
   jsr() {
-    let ret = this.PC - 1;
-    this.write(0x100 & this.Stack, ret >> 8);
+    // the next two instructions are the address to jump too,
+    // so set the return value to the last byte of the address
+    let ret = this.PC + 1;
+    this.write(0x100 | this.Stack, ret >> 8);
     this.Stack--;
-    this.write(0x100 & this.Stack, ret & 0xff);
+    this.write(0x100 | this.Stack, ret & 0xff);
     this.Stack--;
     return this.jmp(Mode.ABS, 6);
   }
@@ -527,9 +535,11 @@ class Nes6502 {
 
   rts() {
     this.Stack++;
-    let lo = this.read(0x100 & this.Stack);
+    let lo = this.read(0x100 | this.Stack);
     this.Stack++;
-    let hi = this.read(0x100 & this.Stack);
+    let hi = this.read(0x100 | this.Stack);
+    // the stack points to the last byte of the jsr address
+    // so increment it by one when setting pc
     this.PC = ((hi << 8) | lo) + 1;
     return 6;
   }
@@ -625,15 +635,12 @@ class Nes6502 {
       return fn.apply(this, args);
     }
     console.log("unknown instruction");
-    fs.writeFileSync("logtest.txt", this.log);
     process.exit(1);
   }
 
   clock() {
     let ins = this.read(this.PC);
-    this.PC++;
-    this.cycles += this.execute(ins);
-    this.log +=
+    let log =
       toHex16(this.PC) +
       " " +
       toHex8(ins) +
@@ -648,8 +655,11 @@ class Nes6502 {
       " SP: " +
       toHex8(this.Stack) +
       " CYC: " +
-      this.cycles + //need to add cycle from where it is returned instead of hardcode
+      this.cycles +
       "\n";
+    fs.appendFileSync(LOG, log);
+    this.PC++;
+    this.cycles += this.execute(ins);
   }
 }
 
