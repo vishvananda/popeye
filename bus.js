@@ -1,13 +1,15 @@
 const Cart = require("./cart");
 
 class Bus {
-  constructor(input) {
+  constructor(input, ppu) {
     this.input = input;
+    this.ppu = ppu;
     this.ram = new Uint8Array(0x0800);
   }
 
   loadRom(file) {
     this.cart = new Cart(file);
+    this.ppu.loadCart(this.cart);
   }
 
   read(address) {
@@ -18,7 +20,7 @@ class Bus {
     } else if (address >= 0x4016 && address <= 0x4017) {
       return this.input.read(address);
     } else if (address >= 0x8000 && address <= 0xffff) {
-      return this.cart.cpu_read(address);
+      return this.cart.cpuRead(address);
     }
   }
 
@@ -30,7 +32,7 @@ class Bus {
     } else if (address >= 0x4016 && address <= 0x4017) {
       this.input.write(address);
     } else if (address >= 0x8000 && address <= 0xffff) {
-      return this.cart.cpu_write(address);
+      return this.cart.cpuWrite(address);
     }
   }
 }

@@ -39,10 +39,10 @@ class Cart {
     this.chr = data.slice(chr_start, chr_start + chr_size);
   }
 
-  cpu_read(address) {
-    return this.prg[this.prg_offset(address)];
+  cpuRead(address) {
+    return this.prg[this.prgOffset(address)];
   }
-  prg_offset(address) {
+  prgOffset(address) {
     address -= 0x8000;
     if (this.prg.length == 0x4000) {
       address &= 0x3fff;
@@ -50,9 +50,14 @@ class Cart {
     return address;
   }
 
-  cpu_write(address) {
+  cpuWrite(address) {
     console.log("writing not allowed to address", address);
     process.exit(1);
+  }
+
+  getTile(bank, num) {
+    let start = bank * 0x1000 + num * 16;
+    return this.chr.slice(start, start + 15);
   }
 }
 

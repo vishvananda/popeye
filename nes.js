@@ -1,5 +1,6 @@
 const glfw = require("glfw-raub");
 const IO = require("./io");
+const PPU = require("./ppu");
 const Cpu = require("./cpu");
 const Bus = require("./bus");
 const Input = require("./input");
@@ -39,15 +40,20 @@ function run() {
   //     buffer[loc + 2] = c;
   //   }
   // }
-  io.setPixel(0, 0, c, 0, 0);
-  io.setPixel(1, 0, c, 0, 0);
-  io.setPixel(2, 0, c, 0, 0);
-  io.setPixel(127, 119, 0, c, 0);
-  io.setPixel(128, 119, 0, c, 0);
-  io.setPixel(129, 119, 0, c, 0);
-  io.setPixel(253, 239, 0, 0, c);
-  io.setPixel(254, 239, 0, 0, c);
-  io.setPixel(255, 239, 0, 0, c);
+  // io.setPixel(0, 0, c, 0, 0);
+  // io.setPixel(1, 0, c, 0, 0);
+  // io.setPixel(2, 0, c, 0, 0);
+  // io.setPixel(127, 119, 0, c, 0);
+  // io.setPixel(128, 119, 0, c, 0);
+  // io.setPixel(129, 119, 0, c, 0);
+  // io.setPixel(253, 239, 0, 0, c);
+  // io.setPixel(254, 239, 0, 0, c);
+  // io.setPixel(255, 239, 0, 0, c);
+  for (let i = 0; i < 256; i++) {
+    let y = Math.floor(i / 16);
+    let x = i % 16;
+    ppu.showTile(x * 10, y * 10, 0, i);
+  }
   io.tick(run);
 }
 
@@ -88,7 +94,7 @@ function dump() {
   console.log(hexdump(buf, offset, length));
   offset = 0x01d0;
   console.log(hexdump(buf, offset, length));
-  offset = bus.cart.prg_offset(cpu.PC) & 0xfff0;
+  offset = bus.cart.prgOffset(cpu.PC) & 0xfff0;
   const buf2 = Buffer.from(bus.cart.prg);
   console.log(hexdump(buf2, offset, length));
 }
@@ -119,7 +125,8 @@ function handleKey(key) {
 
 const io = new IO(w, h);
 const input = new Input(io);
-const bus = new Bus(input);
+const ppu = new PPU(io);
+const bus = new Bus(input, ppu);
 const cpu = new Cpu(bus);
 io.registerKeyPressHandler(handleKey);
 bus.loadRom("nestest.nes");
@@ -141,7 +148,7 @@ function _fillUp(value, count, fillWith) {
 }
 function hexdump(buffer, offset, length) {
   offset = offset || 0;
-  const total_length = offset + length || buffer.length;
+  const totalLen = offset + length || buffer.length;
 
   var out =
     _fillUp("Offset", 8, " ") +
@@ -149,7 +156,7 @@ function hexdump(buffer, offset, length) {
   var row = "";
   for (var i = 0; i < length; i += 16) {
     row += _fillUp(offset.toString(16).toUpperCase(), 8, "0") + "  ";
-    var n = Math.min(16, total_length - offset);
+    var n = Math.min(16, totalLen - offset);
     var string = "";
     for (var j = 0; j < 16; ++j) {
       if (j < n) {

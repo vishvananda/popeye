@@ -223,7 +223,7 @@ class Nes6502 {
     this.cycles = 7;
   }
 
-  store_log_vars(addr) {
+  storeLogVars(addr) {
     this.addr = addr;
     this.last = this.read(addr);
     if (this.last === undefined) {
@@ -300,7 +300,7 @@ class Nes6502 {
     } else {
       [addr, extra] = this.calcAddress(mode, off);
     }
-    this.store_log_vars(addr);
+    this.storeLogVars(addr);
     return [this.read(addr), extra];
   }
 
@@ -508,7 +508,7 @@ class Nes6502 {
       let hi = this.read(second);
       addr = (hi << 8) | lo;
     }
-    this.store_log_vars(addr);
+    this.storeLogVars(addr);
     this.PC = addr;
     return cycles;
   }
@@ -527,16 +527,16 @@ class Nes6502 {
   rti() {
     this.pull("Status");
     // the pc is the actual jump address
-    return this.jump_stack(0);
+    return this.jumpStack(0);
   }
 
   rts() {
     // the stack points to the last byte of the jsr address
     // so increment it by one when setting pc
-    return this.jump_stack(1);
+    return this.jumpStack(1);
   }
 
-  jump_stack(offset) {
+  jumpStack(offset) {
     this.Stack++;
     let lo = this.read(0x100 | this.Stack);
     this.Stack++;
@@ -568,7 +568,7 @@ class Nes6502 {
     let cycles = 2;
     let addr = this.PC;
     addr += lo;
-    this.store_log_vars(addr);
+    this.storeLogVars(addr);
     if (this.getStatus(flag) ^ invert) {
       cycles += 1; // if branch succeeds +1
       if (addr >> 8 != this.PC >> 8) {
@@ -629,7 +629,7 @@ class Nes6502 {
         break;
     }
     // save the memory at current address for logging
-    this.store_log_vars(addr);
+    this.storeLogVars(addr);
     return [addr, extra];
   }
 
