@@ -1,6 +1,41 @@
+//control register starter code
+const ControlRegister = {
+  NAMETABLE1: 1 << 0,
+  NAMETABLE2: 1 << 1,
+  VRAM_ADD_INCREMENT: 1 << 2,
+  SPRITE_PATTERN_ADDR: 1 << 3,
+  BACKGROUND_PATTERN_ADDR: 1 << 4,
+  SPRITE_SIZE: 1 << 5,
+  MASTER_SLAVE_SELECT: 1 << 6,
+  GENERATE_NMI: 1 << 7,
+};
+class CR {
+  //below are two functions in rust code, not sure what they are doing
+  // pub fn new() -> Self {
+  //   ControlRegister::from_bits_truncate(0b00000000)
+  // }
+  // pub fn update(&mut self, data: u8) {
+  //   self.bits = data
+  // }
+
+  vramAddrIncrement() {
+    //Rust has increment(&self) -> u8
+    if (!this.includes(ControlRegister.VRAM_ADD_INCREMENT)) {
+      1;
+    } else {
+      32;
+    }
+  }
+}
 class PPU {
   constructor(io) {
     this.io = io;
+    //added for control, possibly incorrect
+    this.ctrl = CR; //we also need a function for write to ctrl, and read from PPU memory
+    // then buffer behavior to hold value from previous read request, then
+    // -mirroring
+    // -connecting PPU to bus
+    // -if haven't yet, modeling address register and expose as being writable
   }
 
   loadCart(cart) {
