@@ -39,7 +39,7 @@ class Cart {
     this.chr = data.slice(chr_start, chr_start + chr_size);
   }
 
-  cpuRead(address) {
+  read(address) {
     return this.prg[this.prgOffset(address)];
   }
   prgOffset(address) {
@@ -50,7 +50,7 @@ class Cart {
     return address;
   }
 
-  cpuWrite(address) {
+  write(address) {
     console.log("writing not allowed to address", address);
     process.exit(1);
   }
