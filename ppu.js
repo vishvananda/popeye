@@ -1,5 +1,6 @@
-//control register starter code
-const ControlRegister = {
+const hex = require("./hex");
+
+const CR = {
   NAMETABLE1: 1 << 0,
   NAMETABLE2: 1 << 1,
   VRAM_ADD_INCREMENT: 1 << 2,
@@ -9,40 +10,43 @@ const ControlRegister = {
   MASTER_SLAVE_SELECT: 1 << 6,
   GENERATE_NMI: 1 << 7,
 };
-class CR {
-  //below are two functions in rust code, not sure what they are doing
-  // pub fn new() -> Self {
-  //   ControlRegister::from_bits_truncate(0b00000000)
-  // }
-  // pub fn update(&mut self, data: u8) {
-  //   self.bits = data
-  // }
 
-  vramAddrIncrement() {
-    //Rust has increment(&self) -> u8
-    if (!this.includes(ControlRegister.VRAM_ADD_INCREMENT)) {
-      1;
-    } else {
-      32;
-    }
-  }
-}
+const Mask = {
+  GRAYSCALE: 1 << 0,
+  BACK_LEFT: 1 << 1,
+  SPRITE_LEFT: 1 << 2,
+  BACKGROUND: 1 << 3,
+  SPRITE: 1 << 4,
+  RED: 1 << 5,
+  GREEN: 1 << 6,
+  BLUE: 1 << 7,
+};
+
+const St = {
+  OVERFLOW: 1 << 5,
+  SPRITE_ZERO: 1 << 6,
+  VERTICAL_BLANK: 1 << 7,
+};
+
 class PPU {
   constructor(io) {
+    this.control = 0;
+    this.mask = 0;
+    this.addr = 0;
+    this.addrHi = true;
+    this.oamAddr = 0;
     this.io = io;
-    //added for control, possibly incorrect
-    this.ctrl = CR; //we also need a function for write to ctrl, and read from PPU memory
-    // then buffer behavior to hold value from previous read request, then
-    // -mirroring
-    // -connecting PPU to bus
-    // -if haven't yet, modeling address register and expose as being writable
+    this.buffer = 0;
+    this.x = 0;
+    this.y = 0;
+    this.scrollx = true;
   }
 
   loadCart(cart) {
     this.cart = cart;
-    this.palette_table = new Uint8Array(32);
+    this.palette = new Uint8Array(32);
     this.vram = new Uint8Array(2048);
-    this.oam_data = new Uint8Array(256);
+    this.oam = new Uint8Array(256);
     this.mirroring = cart.mirroring;
   }
 
@@ -79,12 +83,151 @@ class PPU {
     }
   }
 
-  read(address) {
-    process.exit(1);
+  incAddr() {
+    if ((this.control & CR.VRAM_ADD_INCREMENT) == CR.VRAM_ADD_INCREMENT) {
+      this.addr += 32;
+    } else {
+      this.addr += 1;
+    }
+    this.addr &= 0x3fff;
   }
 
-  write(address) {
-    process.exit(1);
+  readData() {
+    let addr = this.addr;
+    this.incAddr();
+    if (addr >= 0x0000 && addr <= 0x1fff) {
+      // read from chr
+      let result = this.buffer;
+      this.buffer = this.chr[addr];
+      return result;
+    } else if (addr >= 0x2000 && addr <= 0x2fff) {
+      // read from ram
+      let result = this.buffer;
+      this.buffer = this.vram[addr];
+      return result;
+    } else if (addr >= 0x3000 && addr <= 0x3eff) {
+      console.log("illegal read " + hex.toHex16(addr));
+      process.exit(1);
+    } else if (addr >= 0x3f00 && addr <= 0x3fff) {
+      // sets internal buffer from weird address
+      this.buffer = this.vram[addr - 0x1000];
+      // $3F10/$3F14/$3F18/$3F1C are mirrors of $3F00/$3F04/$3F08/$3F0C
+      return this.palette[addr - 0x3f00];
+    } else {
+      console.log("oops broken mirroring " + hex.toHex16(addr));
+      process.exit(1);
+    }
+  }
+
+  writeAddr(data) {
+    if (this.addrHi) {
+      this.addr = (this.addr & 0x00ff) | (data << 8);
+    } else {
+      this.addr = (this.addr & 0xff00) | data;
+    }
+    this.addrHi = !this.addrHi;
+  }
+
+  readStatus() {
+    let status = this.status;
+    // reset addr latch
+    this.addr = 0;
+    this.addrHi = true;
+    // clear vblank;
+    this.status &= ~St.VERTICAL_BLANK;
+    return status;
+  }
+
+  writeData(data) {
+    let addr = this.addr;
+    this.incAddr();
+    if (addr >= 0x0000 && addr <= 0x1fff) {
+      // write data chr
+      this.chr[addr] = data;
+    } else if (addr >= 0x2000 && addr <= 0x2fff) {
+      // write to ram
+      this.vram[addr] = data;
+    } else if (addr >= 0x3000 && addr <= 0x3eff) {
+      console.log("illegal write " + hex.toHex16(addr));
+      process.exit(1);
+    } else if (addr >= 0x3f00 && addr <= 0x3fff) {
+      // $3F10/$3F14/$3F18/$3F1C are mirrors of $3F00/$3F04/$3F08/$3F0C
+      if ((addr & 0xf3) == 0x10) {
+        addr -= 0x10;
+      }
+      // f3 = 1111 00 11
+      //    &
+      // 10 = 0001 00 00
+      // 14 = 0001 01 00
+      // 18 = 0001 10 00
+      // 1C = 0001 11 00
+      // f5 = 1111 01 01
+      // ---------------
+      // f1 = 1111 00 01
+      this.palette[addr - 0x3f00] = data;
+    } else {
+      console.log("oops broken mirroring " + hex.toHex16(addr));
+      process.exit(1);
+    }
+  }
+
+  read(address) {
+    switch (address) {
+      case 0x2002:
+        // Status
+        return this.readStatus();
+      case 0x2004:
+        // OAM Data
+        // shouldn't be read in most games
+        console.log("read from oam data");
+        return this.oam[this.oamAddr];
+      case 0x2007:
+        return this.readData();
+      default:
+        console.log("read from unknown ppu register " + hex.toHex16(address));
+        process.exit(1);
+    }
+  }
+  write(address, data) {
+    this.status = (this.status & 0xe0) | (data & 0x1f);
+    switch (address) {
+      case 0x2000:
+        this.control = data;
+        break;
+      case 0x2001:
+        this.mask = data;
+        break;
+      case 0x2003:
+        this.oamAddr = data;
+        // OAM Address
+        break;
+      case 0x2004:
+        // OAM Data
+        this.oam[this.oamAddr] = data;
+        this.oamAddr++;
+        this.oamAddr &= 0xff;
+        break;
+      case 0x2005:
+        // Scroll
+        if (this.scrollx) {
+          this.x = data;
+        } else {
+          this.y = data;
+        }
+        this.scrollx = !this.scrollx;
+        break;
+      case 0x2006:
+        // address register
+        this.writeAddr(data);
+        break;
+      case 0x2007:
+        // data register
+        this.writeData(data);
+        break;
+      default:
+        console.log("write to unknown ppu register " + hex.toHex16(address));
+        process.exit(1);
+    }
   }
 }
 

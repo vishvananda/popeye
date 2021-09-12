@@ -5,6 +5,7 @@ const Cpu = require("./cpu");
 const Bus = require("./bus");
 const Input = require("./input");
 const fs = require("fs");
+const hex = require("./hex");
 
 var running = false;
 var linenum = 0;
@@ -57,48 +58,6 @@ function run() {
   io.tick(run);
 }
 
-function toHex8(val) {
-  return ("00" + val.toString(16).toUpperCase()).slice(-2);
-}
-function toHex16(val) {
-  return ("0000" + val.toString(16).toUpperCase()).slice(-4);
-}
-
-function dump() {
-  console.clear();
-  console.log(
-    "A: " +
-      toHex8(cpu.A) +
-      "\t" +
-      "X: " +
-      toHex8(cpu.X) +
-      "\t" +
-      "Y: " +
-      toHex8(cpu.Y) +
-      "\t" +
-      "PC: " +
-      toHex16(cpu.PC) +
-      "\t" +
-      "Stk: " +
-      toHex8(cpu.Stack) +
-      "\t" +
-      "Sts: " +
-      toHex8(cpu.Status) +
-      "\t" +
-      "Ins: " +
-      toHex8(cpu.read(cpu.PC))
-  );
-  const buf = Buffer.from(bus.ram);
-  const length = 3 * 16;
-  var offset = 0x0000;
-  console.log(hexdump(buf, offset, length));
-  offset = 0x01d0;
-  console.log(hexdump(buf, offset, length));
-  offset = bus.cart.prgOffset(cpu.PC) & 0xfff0;
-  const buf2 = Buffer.from(bus.cart.prg);
-  console.log(hexdump(buf2, offset, length));
-}
-
 const w = 256;
 const h = 240;
 
@@ -123,6 +82,41 @@ function handleKey(key) {
   return true;
 }
 
+function dump() {
+  console.clear();
+  console.log(
+    "A: " +
+      hex.toHex8(cpu.A) +
+      "\t" +
+      "X: " +
+      hex.toHex8(cpu.X) +
+      "\t" +
+      "Y: " +
+      hex.toHex8(cpu.Y) +
+      "\t" +
+      "PC: " +
+      hex.toHex16(cpu.PC) +
+      "\t" +
+      "Stk: " +
+      hex.toHex8(cpu.Stack) +
+      "\t" +
+      "Sts: " +
+      hex.toHex8(cpu.Status) +
+      "\t" +
+      "Ins: " +
+      hex.toHex8(cpu.read(cpu.PC))
+  );
+  const buf = Buffer.from(bus.ram);
+  const length = 3 * 16;
+  var offset = 0x0000;
+  console.log(hex.hexdump(buf, offset, length));
+  offset = 0x01d0;
+  console.log(hex.hexdump(buf, offset, length));
+  offset = bus.cart.prgOffset(cpu.PC) & 0xfff0;
+  const buf2 = Buffer.from(bus.cart.prg);
+  console.log(hex.hexdump(buf2, offset, length));
+}
+
 const io = new IO(w, h);
 const input = new Input(io);
 const ppu = new PPU(io);
@@ -139,38 +133,3 @@ logs = fs.readFileSync(CANONICAL_LOG, "utf8").split("\n");
 cpu.PC = 0xc000;
 dump();
 run();
-
-function _fillUp(value, count, fillWith) {
-  var l = count - value.length;
-  var ret = "";
-  while (--l > -1) ret += fillWith;
-  return ret + value;
-}
-function hexdump(buffer, offset, length) {
-  offset = offset || 0;
-  const totalLen = offset + length || buffer.length;
-
-  var out =
-    _fillUp("Offset", 8, " ") +
-    "  00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F\n";
-  var row = "";
-  for (var i = 0; i < length; i += 16) {
-    row += _fillUp(offset.toString(16).toUpperCase(), 8, "0") + "  ";
-    var n = Math.min(16, totalLen - offset);
-    var string = "";
-    for (var j = 0; j < 16; ++j) {
-      if (j < n) {
-        var value = buffer.readUInt8(offset);
-        string += value >= 32 ? String.fromCharCode(value) : ".";
-        row += _fillUp(value.toString(16).toUpperCase(), 2, "0") + " ";
-        offset++;
-      } else {
-        row += "   ";
-        string += " ";
-      }
-    }
-    row += " " + string + "\n";
-  }
-  out += row;
-  return out;
-}
