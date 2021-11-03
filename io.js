@@ -223,40 +223,42 @@ class IO {
     glfw.terminate();
   }
 
-  tick(callback) {
-    this.gl.viewport(0, 0, this.gl.viewportWidth, this.gl.viewportHeight);
-    this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
+  tick(callback, graphics) {
+    if (graphics) {
+      this.gl.viewport(0, 0, this.gl.viewportWidth, this.gl.viewportHeight);
+      this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
 
-    this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.screenQuadVBO);
-    this.gl.enableVertexAttribArray(this.vertexPosition);
-    this.gl.vertexAttribPointer(
-      this.vertexPosition,
-      2,
-      this.gl.FLOAT,
-      false,
-      0,
-      0
-    );
+      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.screenQuadVBO);
+      this.gl.enableVertexAttribArray(this.vertexPosition);
+      this.gl.vertexAttribPointer(
+        this.vertexPosition,
+        2,
+        this.gl.FLOAT,
+        false,
+        0,
+        0
+      );
 
-    this.gl.bindTexture(this.gl.TEXTURE_2D, this.texture);
-    this.gl.pixelStorei(this.gl.UNPACK_ALIGNMENT, 1);
-    this.gl.texSubImage2D(
-      this.gl.TEXTURE_2D,
-      0,
-      0,
-      0,
-      this.width,
-      this.height,
-      this.gl.RGB,
-      this.gl.UNSIGNED_BYTE,
-      this.data
-    );
+      this.gl.bindTexture(this.gl.TEXTURE_2D, this.texture);
+      this.gl.pixelStorei(this.gl.UNPACK_ALIGNMENT, 1);
+      this.gl.texSubImage2D(
+        this.gl.TEXTURE_2D,
+        0,
+        0,
+        0,
+        this.width,
+        this.height,
+        this.gl.RGB,
+        this.gl.UNSIGNED_BYTE,
+        this.data
+      );
 
-    this.gl.uniform1i(this.textureLocation, 0);
-    // Draw 6 vertexes => 2 trianthis.gles:
-    this.gl.drawArrays(this.gl.TRIANGLES, 0, 6);
+      this.gl.uniform1i(this.textureLocation, 0);
+      // Draw 6 vertexes => 2 trianthis.gles:
+      this.gl.drawArrays(this.gl.TRIANGLES, 0, 6);
 
-    this.gl.bindTexture(this.gl.TEXTURE_2D, null);
+      this.gl.bindTexture(this.gl.TEXTURE_2D, null);
+    }
     this.frame(callback);
   }
 }

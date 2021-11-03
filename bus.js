@@ -17,7 +17,6 @@ class Bus {
       return this.ram[address & 0x07ff];
     } else if (address >= 0x2000 && address <= 0x3fff) {
       return this.ppu.read(address);
-      // ppu here
     } else if (address >= 0x4016 && address <= 0x4017) {
       return this.input.read(address);
     } else if (address >= 0x8000 && address <= 0xffff) {
@@ -29,11 +28,11 @@ class Bus {
     if (address >= 0x0000 && address <= 0x1fff) {
       this.ram[address & 0x7ff] = data;
     } else if (address >= 0x2000 && address <= 0x3fff) {
-      return this.ppu.write(address);
+      return this.ppu.write(address, data);
     } else if (address >= 0x4016 && address <= 0x4017) {
-      this.input.write(address);
+      this.input.write(address, data);
     } else if (address >= 0x8000 && address <= 0xffff) {
-      return this.cart.write(address);
+      return this.cart.write(address, data);
     }
   }
 }

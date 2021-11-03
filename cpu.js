@@ -225,9 +225,13 @@ class Nes6502 {
 
   storeLogVars(addr) {
     this.addr = addr;
-    this.last = this.read(addr);
+    if (addr >= 0x0000 && addr <= 0x1fff) {
+      this.last = this.read(addr);
+    } else {
+      this.last = 0;
+    }
     if (this.last === undefined) {
-      console.log("WHOOPS at ", addr);
+      console.log("Undefined value at ", addr);
     }
   }
 
@@ -643,27 +647,35 @@ class Nes6502 {
     let log = `${pc}  ${ins[0]} ${ins[1]} ${ins[2]}  ${mne}`;
     log += `A:${toHex8(this.A)} X:${toHex8(this.X)} Y:${toHex8(this.Y)} `;
     log += `P:${toHex8(this.Status)} SP:${toHex8(this.Stack)} `;
-    log += `PPU:  0,  0 CYC:${this.cycles}`;
+    log += `PPU:%ppu CYC:${this.cycles}`;
     return log;
   }
 
-  clock() {
+  clock(shouldLog) {
     let parts = this.lookup[this.read(this.PC)];
     if (parts === undefined) {
       console.log("unknown instruction");
       process.exit(1);
     }
     let [mne, len, fn, ...args] = parts;
-    let ret = this.log_ins(mne, len);
+    let ret = "";
+    if (shouldLog) {
+      ret = this.log_ins(mne, len);
+    }
+
     this.PC++;
-    this.cycles += fn.apply(this, args);
-    // write calculated values
-    ret = ret.replace("%x", toHex8(this.ind));
-    ret = ret.replace("%yyy", toHex16(this.ind));
-    ret = ret.replace("%r", toHex8(this.addr));
-    ret = ret.replace("%abs", toHex16(this.addr));
-    ret = ret.replace("%v", toHex8(this.last));
-    return ret;
+    let cycles = fn.apply(this, args);
+    this.cycles += cycles;
+
+    if (shouldLog) {
+      // write calculated values
+      ret = ret.replace("%x", toHex8(this.ind));
+      ret = ret.replace("%yyy", toHex16(this.ind));
+      ret = ret.replace("%r", toHex8(this.addr));
+      ret = ret.replace("%abs", toHex16(this.addr));
+      ret = ret.replace("%v", toHex8(this.last));
+    }
+    return [cycles, ret];
   }
 }
 
