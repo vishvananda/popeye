@@ -9,30 +9,34 @@ const hex = require("./hex");
 
 var running = false;
 var debug = false;
+var validate = false;
 var graphics = true;
 var linenum = 0;
 var logs = null;
 var cycles = 0;
-const LOG = "nestest.log";
+const LOG = "debug.log";
 const CANONICAL_LOG = "canonical.nestest.log";
 
 function tick() {
   cycles++;
   ppu.tick();
   if (cycles % 3 == 0) {
-    let log = cpu.tick(debug);
-    if (log !== undefined && debug) {
+    let bLog = debug || validate;
+    let log = cpu.tick(bLog);
+    if (log !== undefined && bLog) {
       let s = ("   " + ppu.scanline).slice(-3);
       let p = ("   " + ppu.cycle).slice(-3);
       log = log.replace("%ppu", s + "," + p);
       fs.appendFileSync(LOG, log + "\n");
-      let line = logs[linenum++].trim();
-      if (log != line) {
-        console.log("ERROR ON LINE ", linenum);
-        console.log(`OURS:   '${log}'`);
-        console.log(`THEIRS: '${line}'`);
-        console.log(`CYCLES: '${cycles}'`);
-        process.exit(1);
+      if (validate) {
+        let line = logs[linenum++].trim();
+        if (log != line) {
+          console.log("ERROR ON LINE ", linenum);
+          console.log(`OURS:   '${log}'`);
+          console.log(`THEIRS: '${line}'`);
+          console.log(`CYCLES: '${cycles}'`);
+          process.exit(1);
+        }
       }
     }
   }
@@ -55,11 +59,6 @@ function run() {
     ppu.frame = false;
   }
   io.tick(run, graphics);
-  // for (let i = 0; i < 256; i++) {
-  //   let y = Math.floor(i / 16);
-  //   let x = i % 16;
-  //   ppu.showTile(x * 8, y * 8, 0, i);
-  // }
 }
 
 const w = 256;
@@ -98,6 +97,37 @@ function handleKey(key) {
     case "d":
       // enable or disable debug
       debug = !debug;
+      if (debug) {
+        // clear log
+        fs.writeFileSync(LOG, "");
+      }
+      break;
+    case "v":
+      // enable or disable validate (for nestest)
+      validate = !validate;
+      if (validate) {
+        bus.loadRom("nestest.nes");
+        running = true;
+        // clear log
+        fs.writeFileSync(LOG, "");
+        // load canonical log
+        logs = fs.readFileSync(CANONICAL_LOG, "utf8").split("\n");
+        // force automation mode
+        cpu.PC = 0xc000;
+      }
+      break;
+    case "t":
+      // draw tiles
+      for (let i = 0; i < 256; i++) {
+        let y = Math.floor(i / 32);
+        let x = i % 32;
+        ppu.showTile(x * 8, y * 8, 0, i);
+      }
+      for (let i = 0; i < 256; i++) {
+        let y = Math.floor(i / 32);
+        let x = i % 32;
+        ppu.showTile(x * 8, y * 8 + 128, 1, i);
+      }
       break;
     case "r":
       // run
@@ -147,17 +177,11 @@ function dump() {
 const io = new IO(w, h);
 const input = new Input(io);
 const ppu = new PPU(io);
-const bus = new Bus(input, ppu);
-const cpu = new Cpu(bus);
+const cpu = new Cpu();
+const bus = new Bus(input, ppu, cpu);
 io.registerKeyPressHandler(handleKey);
-//bus.loadRom("nestest.nes");
 bus.loadRom("pacman.nes");
-cpu.reset();
 // clear log
 fs.writeFileSync(LOG, "");
-// load canonical log
-logs = fs.readFileSync(CANONICAL_LOG, "utf8").split("\n");
-// force automation mode
-// cpu.PC = 0xc000;
 dump();
 run();

@@ -1,2 +1,5 @@
 node_modules/
-nestest.log
+debug.log
+
+*.nes
+!nestest.nes

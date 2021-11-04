@@ -7,8 +7,8 @@ function toHex16(val) {
 }
 
 class Nes6502 {
-  constructor(bus) {
-    this.bus = bus;
+  constructor() {
+    this.bus = null;
     let indx = "($%1,X) @ %x = %abs = %v";
     let indy = "($%1),Y = %yyy @ %abs = %v";
     this.lookup = {
@@ -202,6 +202,10 @@ class Nes6502 {
     };
   }
 
+  setBus(bus) {
+    this.bus = bus;
+  }
+
   reset() {
     // for logging
     this.addr = 0; // stores last memory address location
@@ -220,7 +224,8 @@ class Nes6502 {
 
     // emulate the interrupt handling code
     this.Stack = 0xfd; // 8-bit stack
-    // reset takes 7 cycles (execution happens on remaining == 0)
+    // remaining is number of cycles for instruction - 1
+    // reset takes 7 cycles, so we set remaining to 6
     this.remaining = 6;
     this.cycles = 0;
   }
@@ -673,6 +678,7 @@ class Nes6502 {
   }
 
   tick(shouldLog) {
+    this.cycles++;
     if (this.remaining == 0) {
       let parts = this.lookup[this.read(this.PC)];
       if (parts === undefined) {
@@ -686,7 +692,7 @@ class Nes6502 {
       }
 
       this.PC++;
-      this.remaining = fn.apply(this, args);
+      this.remaining = fn.apply(this, args) - 1;
 
       if (shouldLog) {
         // write calculated values
@@ -700,7 +706,6 @@ class Nes6502 {
     }
 
     this.remaining--;
-    this.cycles++;
 
     return undefined;
   }

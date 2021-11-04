@@ -1,14 +1,22 @@
 const Cart = require("./cart");
 
 class Bus {
-  constructor(input, ppu) {
+  constructor(input, ppu, cpu) {
     this.input = input;
+    this.cpu = cpu;
+    this.cpu.setBus(this);
     this.ppu = ppu;
     this.ram = new Uint8Array(0x0800);
   }
 
   loadRom(file) {
     this.cart = new Cart(file);
+    this.reset();
+  }
+
+  reset() {
+    this.cpu.reset();
+    this.ppu.reset();
     this.ppu.loadCart(this.cart);
   }
 

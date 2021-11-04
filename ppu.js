@@ -1,74 +1,5 @@
+const fs = require("fs");
 const hex = require("./hex");
-
-const PAL = [
-  [84, 84, 84],
-  [0, 30, 116],
-  [8, 16, 144],
-  [48, 0, 136],
-  [68, 0, 100],
-  [92, 0, 48],
-  [84, 4, 0],
-  [60, 24, 0],
-  [32, 42, 0],
-  [8, 58, 0],
-  [0, 64, 0],
-  [0, 60, 0],
-  [0, 50, 60],
-  [0, 0, 0],
-  [0, 0, 0],
-  [0, 0, 0],
-
-  [152, 150, 152],
-  [8, 76, 196],
-  [48, 50, 236],
-  [92, 30, 228],
-  [136, 20, 176],
-  [160, 20, 100],
-  [152, 34, 32],
-  [120, 60, 0],
-  [84, 90, 0],
-  [40, 114, 0],
-  [8, 124, 0],
-  [0, 118, 40],
-  [0, 102, 120],
-  [0, 0, 0],
-  [0, 0, 0],
-  [0, 0, 0],
-
-  [236, 238, 236],
-  [76, 154, 236],
-  [120, 124, 236],
-  [176, 98, 236],
-  [228, 84, 236],
-  [236, 88, 180],
-  [236, 106, 100],
-  [212, 136, 32],
-  [160, 170, 0],
-  [116, 196, 0],
-  [76, 208, 32],
-  [56, 204, 108],
-  [56, 180, 204],
-  [60, 60, 60],
-  [0, 0, 0],
-  [0, 0, 0],
-
-  [236, 238, 236],
-  [168, 204, 236],
-  [188, 188, 236],
-  [212, 178, 236],
-  [236, 174, 236],
-  [236, 174, 212],
-  [236, 180, 176],
-  [228, 196, 144],
-  [204, 210, 120],
-  [180, 222, 120],
-  [168, 226, 144],
-  [152, 226, 180],
-  [160, 214, 228],
-  [160, 162, 160],
-  [0, 0, 0],
-  [0, 0, 0],
-];
 
 const CR = {
   NAMETABLE1: 1 << 0,
@@ -99,14 +30,27 @@ const St = {
 };
 
 class PPU {
-  constructor(io) {
+  constructor(io, palette = "nes.pal") {
+    this.io = io;
+    this.pal = this.loadPalette(palette);
+  }
+
+  loadPalette(fileName) {
+    let data = fs.readFileSync(fileName);
+    let ret = [];
+    for (let i = 0; i < 64; i++) {
+      ret.push(data.slice(i * 3, (i + 1) * 3));
+    }
+    return ret;
+  }
+
+  reset() {
     this.control = 0;
     this.status = 0;
     this.mask = 0;
     this.addr = 0;
     this.addrHi = true;
     this.oamAddr = 0;
-    this.io = io;
     this.buffer = 0;
     this.x = 0;
     this.y = 0;
@@ -151,22 +95,33 @@ class PPU {
           let aoffset = Math.floor(row / 4) * 8 + Math.floor(column / 4);
           // using first nametable
           let attr = this.vram[0x3c0 + aoffset];
-
-          // shift bytes to get the proper color
-          if (row % 4 > 1) {
-            attr >>= 4;
-          }
-          if (column % 4 > 1) {
-            attr >>= 2;
-          }
+          // shift attr right based on current quadrant
+          attr >>= ((row & 0x02) << 1) | (column & 0x02);
+          // explanation for bit math above
+          // rquad = row & 0x02 (== 0b10 if row is 3rd or 4th)
+          // cquad = col & 0x02 (== 0b10 if col is 3rd or 4th)
+          // bit pairs in table are low to high (attr is 0b BR BL TR TL)
+          // BITS QUAD ((rquad << 1) | cquad)
+          // ------------------------------
+          //   10  TL    0b000 | 0b000 = 0
+          //   32  TR    0b000 | 0b010 = 2
+          //   54  BL    0b100 | 0b000 = 4
+          //   76  BR    0b100 | 0b010 = 6
+          // eqivalent to
+          // if (row % 4 > 1) {
+          //   attr >>= 0b100;
+          // }
+          // if (column % 4 > 1) {
+          //   attr >>= 0b010;
+          // }
 
           // use bottom two bytes to find palette index
           let start = 1 + (attr & 0x03) * 4;
           this.bgpal = [
-            PAL[this.palette[0]],
-            PAL[this.palette[start]],
-            PAL[this.palette[start + 1]],
-            PAL[this.palette[start + 2]],
+            this.pal[this.palette[0]],
+            this.pal[this.palette[start]],
+            this.pal[this.palette[start + 1]],
+            this.pal[this.palette[start + 2]],
           ];
         }
 
@@ -216,7 +171,16 @@ class PPU {
     this.mirroring = cart.mirroring;
   }
 
-  showTile(xloc, yloc, bank, num) {
+  showTile(xloc, yloc, bank, num, palette = undefined) {
+    if (palette === undefined) {
+      palette = [0, 1, 2, 3];
+    }
+    let pal = [
+      this.pal[palette[0]],
+      this.pal[palette[1]],
+      this.pal[palette[2]],
+      this.pal[palette[3]],
+    ];
     let tile = this.cart.getTile(bank, num);
     for (let y = 0; y < 8; y++) {
       let upper = this.reverse(tile[y]);
@@ -225,25 +189,7 @@ class PPU {
         let value = ((1 & lower) << 1) | (1 & upper);
         upper >>= 1;
         lower >>= 1;
-        let [r, g, b] = [0, 0, 0];
-        switch (value) {
-          case 0:
-            [r, g, b] = [255, 0, 0];
-            break;
-          case 1:
-            [r, g, b] = [255, 255, 0];
-            break;
-          case 2:
-            [r, g, b] = [255, 0, 255];
-            break;
-          case 3:
-            [r, g, b] = [0, 255, 0];
-            break;
-          default:
-            console.log("invalid color");
-            process.exit(1);
-            break;
-        }
+        let [r, g, b] = pal[value];
         this.io.setPixel(xloc + x, yloc + y, r, g, b);
       }
     }
