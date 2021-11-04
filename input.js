@@ -4,8 +4,8 @@ const CONT1 = 0x4016;
 const CONT2 = 0x4017;
 
 const Cont1Map = [
-  "z", // A
-  "x", // B
+  glfw.KEY_Z, // A
+  glfw.KEY_X, // B
   glfw.KEY_TAB, // SELECT
   glfw.KEY_ENTER, // START
   glfw.KEY_UP, // UP
@@ -13,7 +13,16 @@ const Cont1Map = [
   glfw.KEY_LEFT, // LEFT
   glfw.KEY_RIGHT, // RIGHT
 ];
-const Cont2Map = [];
+const Cont2Map = [
+  glfw.KEY_Q, // A
+  glfw.KEY_W, // B
+  glfw.KEY_1, // SELECT
+  glfw.KEY_2, // START
+  glfw.KEY_I, // UP
+  glfw.KEY_K, // DOWN
+  glfw.KEY_J, // LEFT
+  glfw.KEY_L, // RIGHT
+];
 
 class Input {
   constructor(io) {
@@ -35,6 +44,9 @@ class Input {
       }
       response = this.io.getKey(Cont2Map[this.c2index]) ? 1 : 0;
       this.c2index++;
+    }
+    if (response) {
+      console.log("got one");
     }
     return response;
   }

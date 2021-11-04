@@ -36,6 +36,11 @@ function tick() {
       }
     }
   }
+
+  if (ppu.nmi) {
+    ppu.nmi = false;
+    cpu.nmi();
+  }
 }
 
 function run() {
@@ -99,8 +104,7 @@ function handleKey(key) {
       running = !running;
       break;
     default:
-      console.log(key + " was pressed.");
-      break;
+      return false;
   }
   return true;
 }
@@ -146,8 +150,8 @@ const ppu = new PPU(io);
 const bus = new Bus(input, ppu);
 const cpu = new Cpu(bus);
 io.registerKeyPressHandler(handleKey);
-bus.loadRom("nestest.nes");
-//bus.loadRom("pacman.nes");
+//bus.loadRom("nestest.nes");
+bus.loadRom("pacman.nes");
 cpu.reset();
 // clear log
 fs.writeFileSync(LOG, "");

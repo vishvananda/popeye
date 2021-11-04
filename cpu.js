@@ -261,6 +261,25 @@ class Nes6502 {
     return 2;
   }
 
+  nmi() {
+    this.write(0x100 | this.Stack, this.PC >> 8);
+    this.Stack--;
+    this.write(0x100 | this.Stack, this.PC & 0xff);
+    this.Stack--;
+
+    this.clearStatus(St.BREAK);
+    this.setStatus(St.UN);
+    this.setStatus(St.INTD);
+    this.write(0x100 | this.Stack, this.Status);
+    this.Stack--;
+
+    let lo = this.read(0xfffa);
+    let hi = this.read(0xfffb);
+    this.PC = (hi << 8) | lo;
+
+    this.remaining = 8;
+  }
+
   flag(flag, clear) {
     if (clear) {
       this.clearStatus(flag);

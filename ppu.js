@@ -186,7 +186,7 @@ class PPU {
     if (addr >= 0x0000 && addr <= 0x1fff) {
       // read from chr
       let result = this.buffer;
-      this.buffer = this.chr[addr];
+      this.buffer = this.cart.chr[addr];
       return result;
     } else if (addr >= 0x2000 && addr <= 0x2fff) {
       // read from ram
