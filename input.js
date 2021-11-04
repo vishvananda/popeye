@@ -45,22 +45,19 @@ class Input {
       response = this.io.getKey(Cont2Map[this.c2index]) ? 1 : 0;
       this.c2index++;
     }
-    if (response) {
-      console.log("got one");
-    }
     return response;
   }
 
   write(address, data) {
     if (address == CONT1) {
-      if (data & (0x01 == 0x01)) {
+      if (data & 0x01) {
         // theoretically this should read all buttons being
         // pressed at the time of 1 being sent in and should
         // immediately be followed with a 0 write, but we're
         // being lazy and just setting it up so it checks
         // each button during each subsequent read
-        this.c1index == 0;
-        this.c2index == 0;
+        this.c1index = 0;
+        this.c2index = 0;
       }
     }
   }
