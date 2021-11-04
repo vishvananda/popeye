@@ -220,7 +220,9 @@ class Nes6502 {
 
     // emulate the interrupt handling code
     this.Stack = 0xfd; // 8-bit stack
-    this.cycles = 7;
+    // reset takes 7 cycles (execution happens on remaining == 0)
+    this.remaining = 6;
+    this.cycles = 0;
   }
 
   storeLogVars(addr) {
@@ -649,6 +651,43 @@ class Nes6502 {
     log += `P:${toHex8(this.Status)} SP:${toHex8(this.Stack)} `;
     log += `PPU:%ppu CYC:${this.cycles}`;
     return log;
+  }
+
+  tick(shouldLog) {
+    if (this.remaining == 0) {
+      let parts = this.lookup[this.read(this.PC)];
+      if (parts === undefined) {
+        console.log("unknown instruction");
+        process.exit(1);
+      }
+      let [mne, len, fn, ...args] = parts;
+      let ret = "";
+      if (shouldLog) {
+        ret = this.log_ins(mne, len);
+      }
+
+      this.PC++;
+      this.remaining = fn.apply(this, args);
+
+      if (shouldLog) {
+        // write calculated values
+        ret = ret.replace("%x", toHex8(this.ind));
+        ret = ret.replace("%yyy", toHex16(this.ind));
+        ret = ret.replace("%r", toHex8(this.addr));
+        ret = ret.replace("%abs", toHex16(this.addr));
+        ret = ret.replace("%v", toHex8(this.last));
+      }
+      return ret;
+    }
+
+    this.remaining--;
+    this.cycles++;
+
+    return undefined;
+  }
+
+  complete() {
+    return this.remaining == 0;
   }
 
   clock(shouldLog) {

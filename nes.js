@@ -9,25 +9,34 @@ const hex = require("./hex");
 
 var running = false;
 var debug = false;
-var graphics = false;
+var graphics = true;
 var linenum = 0;
 var logs = null;
+var cycles = 0;
 const LOG = "nestest.log";
 const CANONICAL_LOG = "canonical.nestest.log";
 
-function clock(shouldLog) {
-  let [cycles, log] = cpu.clock(shouldLog);
-  let [scanlines, ppuCycles] = ppu.clock(cycles * 3);
-  if (shouldLog) {
-    scanlines = ("   " + scanlines).slice(-3);
-    ppuCycles = ("   " + ppuCycles).slice(-3);
-    log = log.replace("%ppu", scanlines + "," + ppuCycles);
-    fs.appendFileSync(LOG, log + "\n");
+function tick() {
+  cycles++;
+  ppu.tick();
+  if (cycles % 3 == 0) {
+    let log = cpu.tick(debug);
+    if (log !== undefined && debug) {
+      let s = ("   " + ppu.scanline).slice(-3);
+      let p = ("   " + ppu.cycle).slice(-3);
+      log = log.replace("%ppu", s + "," + p);
+      fs.appendFileSync(LOG, log + "\n");
+      let line = logs[linenum++].trim();
+      if (log != line) {
+        console.log("ERROR ON LINE ", linenum);
+        console.log(`OURS:   '${log}'`);
+        console.log(`THEIRS: '${line}'`);
+        console.log(`CYCLES: '${cycles}'`);
+        process.exit(1);
+      }
+    }
   }
-  return log;
 }
-
-var count = 0;
 
 function run() {
   if (io.shouldClose || io.getKey(glfw.KEY_ESCAPE)) {
@@ -35,30 +44,16 @@ function run() {
     process.exit(0);
   }
   if (running) {
-    let log = clock(debug);
-    if (debug) {
-      let line = logs[linenum++].trim();
-      if (log != line) {
-        console.log("ERROR ON LINE ", linenum);
-        console.log(`OURS:   '${log}'`);
-        console.log(`THEIRS: '${line}'`);
-        process.exit(1);
-      }
-    }
-    count++;
-    if (count == 1000) {
-      count = 0;
-      io.tick(run, graphics);
-    } else {
-      run();
-    }
-  } else {
-    io.tick(run, graphics);
+    do {
+      tick();
+    } while (!ppu.frame);
+    ppu.frame = false;
   }
+  io.tick(run, graphics);
   // for (let i = 0; i < 256; i++) {
   //   let y = Math.floor(i / 16);
   //   let x = i % 16;
-  //   ppu.showTile(x * 10, y * 10, 0, i);
+  //   ppu.showTile(x * 8, y * 8, 0, i);
   // }
 }
 
@@ -68,19 +63,36 @@ const h = 240;
 function handleKey(key) {
   switch (key) {
     case "s":
-      // single step processor
+      // single step instruction
       {
-        clock(true);
+        do {
+          tick();
+        } while (!cpu.complete());
+        do {
+          tick();
+        } while (cpu.complete());
         dump();
+      }
+      break;
+    case "f":
+      // single step frame
+      {
+        do {
+          tick();
+        } while (!ppu.frame);
+        do {
+          tick();
+        } while (cpu.complete());
+        dump();
+        ppu.frame = false;
       }
       break;
     case "g":
       graphics = !graphics;
       break;
     case "d":
-      // debug run
+      // enable or disable debug
       debug = !debug;
-      running = !running;
       break;
     case "r":
       // run

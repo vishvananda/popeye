@@ -41,78 +41,89 @@ class PPU {
     this.x = 0;
     this.y = 0;
     this.scrollx = true;
-    // start cycles at 21 for reset
-    this.cycles = 21;
+    this.cycle = 0;
     this.scanline = 0;
-    this.tiley = 0;
     this.upper = 0;
     this.lower = 0;
     this.tile = null;
+    this.nmi = false;
+  }
+
+  reverse(b) {
+    b = ((b & 0xf0) >> 4) | ((b & 0x0f) << 4);
+    b = ((b & 0xcc) >> 2) | ((b & 0x33) << 2);
+    b = ((b & 0xaa) >> 1) | ((b & 0x55) << 1);
+    return b;
   }
 
   tick() {
-    this.cycles++;
-    if (this.cycles >= 341) {
-      this.cycles -= 341;
-      this.scanline++;
-      if (this.scanline == 241) {
-        this.status |= St.VERTICAL_BLANK;
-        // should trigger nmi interrupt
-      }
-
-      if (this.scanline > 261) {
+    if (this.scanline >= -1 && this.scanline < 240) {
+      if (this.scanline == -1 && this.cycle == 1) {
         // clear vblank;
         this.status &= ~St.VERTICAL_BLANK;
-        this.scanline = 0;
+      }
+      if (this.cycle >= 1 && this.cycle <= 256) {
+        // update tile
+        let [x, y] = [this.cycle - 1, this.scanline];
+        if (x % 8 == 0) {
+          let bank = (this.control & CR.BACKGROUND_PATTERN_ADDR) >> 4;
+          let offset = Math.floor(y / 8) * 32 + x / 8;
+          let num = this.vram[offset];
+          this.tile = this.cart.getTile(bank, num);
+          let finey = y % 8;
+          this.upper = this.reverse(this.tile[finey]);
+          this.lower = this.reverse(this.tile[finey + 8]);
+        }
+
+        let value = ((1 & this.upper) << 1) | (1 & this.lower);
+        this.upper >>= 1;
+        this.lower >>= 1;
+        // get the right color
+        let [r, g, b] = [0, 0, 0];
+        switch (value) {
+          case 0:
+            [r, g, b] = [255, 0, 0];
+            break;
+          case 1:
+            [r, g, b] = [255, 255, 0];
+            break;
+          case 2:
+            [r, g, b] = [255, 0, 255];
+            break;
+          case 3:
+            [r, g, b] = [0, 255, 0];
+            break;
+          default:
+            console.log("invalid color");
+            process.exit(1);
+            break;
+        }
+        this.io.setPixel(x, y, r, g, b);
       }
     }
 
-    // update tiles
-    if (this.cycles % 8 == 0 || this.scanline % 8 == 0) {
-      // TODO: get this from control register
-      let bank = 0;
-      let offset = this.scanline * 4 + this.cycles / 8;
-      let num = this.vram[offset];
-      this.tile = this.cart.getTile(bank, num);
-      this.tiley = 0;
-    } else if (this.tile != null) {
-      this.tiley++;
-      this.upper = this.tile[this.tiley];
-      this.lower = this.tile[this.tiley + 8];
-    }
-
-    if ((this.status & St.VERTICAL_BLANK) != St.VERTICAL_BLANK) {
-      let [x, y] = [this.cycles, this.scanline];
-      let value = ((1 & this.upper) << 1) | (1 & this.lower);
-      this.upper >>= 1;
-      this.lower >>= 1;
-      // get the right color
-      let [r, g, b] = [0, 0, 0];
-      switch (value) {
-        case 0:
-          [r, g, b] = [255, 0, 0];
-          break;
-        case 1:
-          [r, g, b] = [255, 255, 0];
-          break;
-        case 2:
-          [r, g, b] = [255, 0, 255];
-          break;
-        case 3:
-          [r, g, b] = [0, 255, 0];
-          break;
-        default:
-          console.log("invalid color");
-          process.exit(1);
-          break;
+    if (this.scanline == 241 && this.cycle == 1) {
+      this.status |= St.VERTICAL_BLANK;
+      // should trigger nmi interrupt if control register says to
+      if (this.control & CR.GENERATE_NMI) {
+        this.nmi = true;
       }
-      this.io.setPixel(x, y, r, g, b);
+    }
+    this.cycle++;
+    if (this.cycle >= 341) {
+      this.cycle = 0;
+      this.scanline++;
+      if (this.scanline >= 261) {
+        this.scanline = -1;
+        this.frame = true;
+        this.odd = !this.odd;
+      }
     }
   }
 
   clock(cycles) {
     let sl = this.scanline;
-    let c = this.cycles;
+    let c = this.cycle;
     for (let i = 0; i < cycles; i++) {
       this.tick();
     }
@@ -130,9 +141,9 @@ class PPU {
   showTile(xloc, yloc, bank, num) {
     let tile = this.cart.getTile(bank, num);
     for (let y = 0; y < 8; y++) {
-      let upper = tile[y];
-      let lower = tile[y + 8];
-      for (let x = 7; x >= 0; x--) {
+      let upper = this.reverse(tile[y]);
+      let lower = this.reverse(tile[y + 8]);
+      for (let x = 0; x < 8; x++) {
         let value = ((1 & upper) << 1) | (1 & lower);
         upper >>= 1;
         lower >>= 1;
@@ -179,6 +190,7 @@ class PPU {
       return result;
     } else if (addr >= 0x2000 && addr <= 0x2fff) {
       // read from ram
+      // TODO: mirroring
       let result = this.buffer;
       this.buffer = this.vram[addr - 0x2000];
       return result;
@@ -203,7 +215,6 @@ class PPU {
       this.addr = (this.addr & 0xff00) | data;
     }
     this.addrHi = !this.addrHi;
-    console.log(this.addr);
   }
 
   readStatus() {
@@ -224,8 +235,8 @@ class PPU {
       process.exit(1);
     } else if (addr >= 0x2000 && addr <= 0x2fff) {
       // write to ram
+      // TODO: mirroring
       this.vram[addr - 0x2000] = data;
-      console.log("writing to vram", addr, data);
     } else if (addr >= 0x3000 && addr <= 0x3eff) {
       console.log("illegal write " + hex.toHex16(addr));
       process.exit(1);
