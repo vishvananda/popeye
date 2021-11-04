@@ -57,7 +57,7 @@ class Cart {
 
   getTile(bank, num) {
     let start = bank * 0x1000 + num * 16;
-    return this.chr.slice(start, start + 15);
+    return this.chr.slice(start, start + 16);
   }
 }
 

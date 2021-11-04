@@ -1,5 +1,75 @@
 const hex = require("./hex");
 
+const PAL = [
+  [84, 84, 84],
+  [0, 30, 116],
+  [8, 16, 144],
+  [48, 0, 136],
+  [68, 0, 100],
+  [92, 0, 48],
+  [84, 4, 0],
+  [60, 24, 0],
+  [32, 42, 0],
+  [8, 58, 0],
+  [0, 64, 0],
+  [0, 60, 0],
+  [0, 50, 60],
+  [0, 0, 0],
+  [0, 0, 0],
+  [0, 0, 0],
+
+  [152, 150, 152],
+  [8, 76, 196],
+  [48, 50, 236],
+  [92, 30, 228],
+  [136, 20, 176],
+  [160, 20, 100],
+  [152, 34, 32],
+  [120, 60, 0],
+  [84, 90, 0],
+  [40, 114, 0],
+  [8, 124, 0],
+  [0, 118, 40],
+  [0, 102, 120],
+  [0, 0, 0],
+  [0, 0, 0],
+  [0, 0, 0],
+
+  [236, 238, 236],
+  [76, 154, 236],
+  [120, 124, 236],
+  [176, 98, 236],
+  [228, 84, 236],
+  [236, 88, 180],
+  [236, 106, 100],
+  [212, 136, 32],
+  [160, 170, 0],
+  [116, 196, 0],
+  [76, 208, 32],
+  [56, 204, 108],
+  [56, 180, 204],
+  [60, 60, 60],
+  [0, 0, 0],
+  [0, 0, 0],
+
+  [236, 238, 236],
+  [168, 204, 236],
+  [188, 188, 236],
+  [212, 178, 236],
+  [236, 174, 236],
+  [236, 174, 212],
+  [236, 180, 176],
+  [228, 196, 144],
+  [204, 210, 120],
+  [180, 222, 120],
+  [168, 226, 144],
+  [152, 226, 180],
+  [160, 214, 228],
+  [160, 162, 160],
+  [0, 0, 0],
+  [0, 0, 0],
+];
+
 const CR = {
   NAMETABLE1: 1 << 0,
   NAMETABLE2: 1 << 1,
@@ -46,6 +116,7 @@ class PPU {
     this.upper = 0;
     this.lower = 0;
     this.tile = null;
+    this.bgpal = null;
     this.nmi = false;
   }
 
@@ -66,38 +137,45 @@ class PPU {
         // update tile
         let [x, y] = [this.cycle - 1, this.scanline];
         if (x % 8 == 0) {
+          let row = Math.floor(y / 8);
+          let column = x / 8;
           let bank = (this.control & CR.BACKGROUND_PATTERN_ADDR) >> 4;
-          let offset = Math.floor(y / 8) * 32 + x / 8;
+          let offset = row * 32 + column;
+          // using first nametable
           let num = this.vram[offset];
           this.tile = this.cart.getTile(bank, num);
           let finey = y % 8;
           this.upper = this.reverse(this.tile[finey]);
           this.lower = this.reverse(this.tile[finey + 8]);
+
+          let aoffset = Math.floor(row / 4) * 8 + Math.floor(column / 4);
+          // using first nametable
+          let attr = this.vram[0x3c0 + aoffset];
+
+          // shift bytes to get the proper color
+          if (row % 4 > 1) {
+            attr >>= 4;
+          }
+          if (column % 4 > 1) {
+            attr >>= 2;
+          }
+
+          // use bottom two bytes to find palette index
+          let start = 1 + (attr & 0x03) * 4;
+          this.bgpal = [
+            PAL[this.palette[0]],
+            PAL[this.palette[start]],
+            PAL[this.palette[start + 1]],
+            PAL[this.palette[start + 2]],
+          ];
         }
 
-        let value = ((1 & this.upper) << 1) | (1 & this.lower);
+        let value = ((1 & this.lower) << 1) | (1 & this.upper);
         this.upper >>= 1;
         this.lower >>= 1;
         // get the right color
-        let [r, g, b] = [0, 0, 0];
-        switch (value) {
-          case 0:
-            [r, g, b] = [255, 0, 0];
-            break;
-          case 1:
-            [r, g, b] = [255, 255, 0];
-            break;
-          case 2:
-            [r, g, b] = [255, 0, 255];
-            break;
-          case 3:
-            [r, g, b] = [0, 255, 0];
-            break;
-          default:
-            console.log("invalid color");
-            process.exit(1);
-            break;
-        }
+        let [r, g, b] = this.bgpal[value];
+
         this.io.setPixel(x, y, r, g, b);
       }
     }
@@ -144,7 +222,7 @@ class PPU {
       let upper = this.reverse(tile[y]);
       let lower = this.reverse(tile[y + 8]);
       for (let x = 0; x < 8; x++) {
-        let value = ((1 & upper) << 1) | (1 & lower);
+        let value = ((1 & lower) << 1) | (1 & upper);
         upper >>= 1;
         lower >>= 1;
         let [r, g, b] = [0, 0, 0];
