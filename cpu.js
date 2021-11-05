@@ -1,10 +1,4 @@
-// NES emulator
-function toHex8(val) {
-  return ("00" + val.toString(16).toUpperCase()).slice(-2);
-}
-function toHex16(val) {
-  return ("0000" + val.toString(16).toUpperCase()).slice(-4);
-}
+const hex = require("./hex");
 
 class Nes6502 {
   constructor() {
@@ -666,13 +660,15 @@ class Nes6502 {
   log_ins(mne, len) {
     let ins = ["  ", "  ", "  "];
     for (let i = 0; i < len; i++) {
-      ins[i] = toHex8(this.read(this.PC + i));
+      ins[i] = hex.toHex8(this.read(this.PC + i));
     }
-    let pc = toHex16(this.PC);
+    let pc = hex.toHex16(this.PC);
     mne = mne.replace("%1", ins[1]).replace("%2", ins[2]).padEnd(32);
     let log = `${pc}  ${ins[0]} ${ins[1]} ${ins[2]}  ${mne}`;
-    log += `A:${toHex8(this.A)} X:${toHex8(this.X)} Y:${toHex8(this.Y)} `;
-    log += `P:${toHex8(this.Status)} SP:${toHex8(this.Stack)} `;
+    log += `A:${hex.toHex8(this.A)} X:${hex.toHex8(this.X)} Y:${hex.toHex8(
+      this.Y
+    )} `;
+    log += `P:${hex.toHex8(this.Status)} SP:${hex.toHex8(this.Stack)} `;
     log += `PPU:%ppu CYC:${this.cycles}`;
     return log;
   }
@@ -696,11 +692,11 @@ class Nes6502 {
 
       if (shouldLog) {
         // write calculated values
-        ret = ret.replace("%x", toHex8(this.ind));
-        ret = ret.replace("%yyy", toHex16(this.ind));
-        ret = ret.replace("%r", toHex8(this.addr));
-        ret = ret.replace("%abs", toHex16(this.addr));
-        ret = ret.replace("%v", toHex8(this.last));
+        ret = ret.replace("%x", hex.toHex8(this.ind));
+        ret = ret.replace("%yyy", hex.toHex16(this.ind));
+        ret = ret.replace("%r", hex.toHex8(this.addr));
+        ret = ret.replace("%abs", hex.toHex16(this.addr));
+        ret = ret.replace("%v", hex.toHex8(this.last));
       }
       return ret;
     }
@@ -732,11 +728,11 @@ class Nes6502 {
 
     if (shouldLog) {
       // write calculated values
-      ret = ret.replace("%x", toHex8(this.ind));
-      ret = ret.replace("%yyy", toHex16(this.ind));
-      ret = ret.replace("%r", toHex8(this.addr));
-      ret = ret.replace("%abs", toHex16(this.addr));
-      ret = ret.replace("%v", toHex8(this.last));
+      ret = ret.replace("%x", hex.toHex8(this.ind));
+      ret = ret.replace("%yyy", hex.toHex16(this.ind));
+      ret = ret.replace("%r", hex.toHex8(this.addr));
+      ret = ret.replace("%abs", hex.toHex16(this.addr));
+      ret = ret.replace("%v", hex.toHex8(this.last));
     }
     return [cycles, ret];
   }
