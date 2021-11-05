@@ -57,18 +57,10 @@ class PPU {
     this.scrollx = true;
     this.cycle = 0;
     this.scanline = 0;
-    this.upper = 0;
-    this.lower = 0;
-    this.tile = null;
+    this.bgLo = 0;
+    this.bgHi = 0;
     this.bgpal = null;
     this.nmi = false;
-  }
-
-  reverse(b) {
-    b = ((b & 0xf0) >> 4) | ((b & 0x0f) << 4);
-    b = ((b & 0xcc) >> 2) | ((b & 0x33) << 2);
-    b = ((b & 0xaa) >> 1) | ((b & 0x55) << 1);
-    return b;
   }
 
   tick() {
@@ -87,10 +79,10 @@ class PPU {
           let offset = row * 32 + column;
           // using first nametable
           let num = this.vram[offset];
-          this.tile = this.cart.getTile(bank, num);
+          let tile = this.cart.getTile(bank, num);
           let finey = y % 8;
-          this.upper = this.reverse(this.tile[finey]);
-          this.lower = this.reverse(this.tile[finey + 8]);
+          this.bgLo = tile[finey];
+          this.bgHi = tile[finey + 8];
 
           let aoffset = Math.floor(row / 4) * 8 + Math.floor(column / 4);
           // using first nametable
@@ -125,9 +117,11 @@ class PPU {
           ];
         }
 
-        let value = ((1 & this.lower) << 1) | (1 & this.upper);
-        this.upper >>= 1;
-        this.lower >>= 1;
+        // hi bit from msb of second plane
+        let value = ((0x80 & this.bgHi) >> 6) | ((0x80 & this.bgLo) >> 7);
+        // shift planes
+        this.bgHi <<= 1;
+        this.bgLo <<= 1;
         // get the right color
         let [r, g, b] = this.bgpal[value];
 
@@ -183,12 +177,14 @@ class PPU {
     ];
     let tile = this.cart.getTile(bank, num);
     for (let y = 0; y < 8; y++) {
-      let upper = this.reverse(tile[y]);
-      let lower = this.reverse(tile[y + 8]);
+      let lo = tile[y];
+      let hi = tile[y + 8];
       for (let x = 0; x < 8; x++) {
-        let value = ((1 & lower) << 1) | (1 & upper);
-        upper >>= 1;
-        lower >>= 1;
+        // hi bit from msb of second plane
+        let value = ((0x80 & hi) >> 6) | ((0x80 & lo) >> 7);
+        // shift planes
+        lo <<= 1;
+        hi <<= 1;
         let [r, g, b] = pal[value];
         this.io.setPixel(xloc + x, yloc + y, r, g, b);
       }
