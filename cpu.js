@@ -13,7 +13,7 @@ class Nes6502 {
       0x2c: ["BIT $%2%1 = %v", 3, this.bit, Mode.ABS, 4],
 
       // The BRK instruction forces the generation of an interrupt request. The program counter and processor status are pushed on the stack then the IRQ interrupt vector at $FFFE/F is loaded into the PC and the break flag in the status set to one.
-      // 0x00: [this.brk, Mode.IMP, 7],
+      0x00: ["BRK", 1, this.brk],
 
       // clears
       0x18: ["CLC", 1, this.flag, St.CARRY, true],
@@ -258,6 +258,26 @@ class Nes6502 {
 
   nop() {
     return 2;
+  }
+
+  brk() {
+    this.PC++;
+
+    this.setStatus(St.INTD);
+    this.write(0x100 | this.Stack, this.PC >> 8);
+    this.Stack--;
+    this.write(0x100 | this.Stack, this.PC & 0xff);
+    this.Stack--;
+
+    this.setStatus(St.BREAK);
+    this.write(0x100 | this.Stack, this.Status);
+    this.Stack--;
+    this.clearStatus(St.BREAK);
+
+    let lo = this.read(0xfffe);
+    let hi = this.read(0xffff);
+    this.PC = (hi << 8) | lo;
+    return 7;
   }
 
   nmi() {
@@ -676,9 +696,10 @@ class Nes6502 {
   tick(shouldLog) {
     this.cycles++;
     if (this.remaining == 0) {
-      let parts = this.lookup[this.read(this.PC)];
+      let ins = this.read(this.PC);
+      let parts = this.lookup[ins];
       if (parts === undefined) {
-        console.log("unknown instruction");
+        console.log("unknown instruction", hex.toHex8(ins));
         process.exit(1);
       }
       let [mne, len, fn, ...args] = parts;
