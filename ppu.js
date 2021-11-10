@@ -87,19 +87,31 @@ class PPU {
     this.bgpal = null;
     this.nmi = false;
     this.sprites = new Uint8Array(32);
+    this.odd = false;
+    this.zeroHit = false;
   }
 
   tick() {
     if (this.scanline >= -1 && this.scanline < 240) {
+      let rendering = this.mask & (Mask.BACKGROUND | Mask.SPRITE);
+      if (this.scanline == 0 && this.cycle == 0 && this.odd && rendering) {
+        // skip cycle on odd frames
+        this.cycle = 1;
+      }
       if (this.scanline == -1 && this.cycle == 1) {
-        // clear vblank;
+        // clear flags;
         this.status &= ~St.VERTICAL_BLANK;
+        this.status &= ~St.OVERFLOW;
+        this.status &= ~St.SPRITE_ZERO;
       }
       if (this.cycle >= 1 && this.cycle <= 256) {
         let right = false;
         if (this.cycle > 8) {
           right == true;
         }
+        let bg = null;
+        let fg = null;
+        let front = true;
         // update tile
         let [x, y] = [this.cycle - 1, this.scanline];
         if (
@@ -144,7 +156,7 @@ class PPU {
             // use bottom two bytes to find palette index
             let start = 0x01 + (attr & 0x03) * 4;
             this.bgpal = [
-              this.pal[this.palette[0]],
+              null,
               this.pal[this.palette[start]],
               this.pal[this.palette[start + 1]],
               this.pal[this.palette[start + 2]],
@@ -157,11 +169,7 @@ class PPU {
           this.bgHi <<= 1;
           this.bgLo <<= 1;
           // get the right color
-          let [r, g, b] = this.bgpal[value];
-
-          this.io.setPixel(x, y, r, g, b);
-        } else {
-          this.io.setPixel(x, y, 0, 0, 0);
+          bg = this.bgpal[value];
         }
 
         if (
@@ -173,10 +181,6 @@ class PPU {
             let i = n * 4;
             let spriteX = this.sprites[i + 3];
             let attr = this.sprites[i + 2];
-            // TODO: remove this hack for background detection
-            if (attr & SpriteByteTwo.PRIORITY) {
-              continue;
-            }
             if (x >= spriteX && x < spriteX + 8) {
               // sprites are delayed by one scanline
               let finey = this.scanline - 1 - this.sprites[i];
@@ -201,30 +205,53 @@ class PPU {
                 this.pal[this.palette[start + 2]],
               ];
               let value = ((0x80 & hi) >> 6) | ((0x80 & lo) >> 7);
-              if (fgpal[value] != null) {
-                let [r, g, b] = fgpal[value];
-                this.io.setPixel(x, y, r, g, b);
-                // we drew a pixel so skip the rest of the sprites
+              fg = fgpal[value];
+              if (fg != null) {
+                if (this.zeroHit && n == 0 && bg != null && x != 255) {
+                  this.status |= St.SPRITE_ZERO;
+                }
+                // we found a pixel so skip the rest of the sprites
+                if (attr & SpriteByteTwo.PRIORITY) {
+                  front = false;
+                }
                 break;
               }
             }
           }
+
+          // start with the background color
+          let color = this.pal[this.palette[0]];
+          if (fg != null) {
+            if (front || bg == null) {
+              color = fg;
+            }
+          } else if (bg != null) {
+            color = bg;
+          }
+
+          let [r, g, b] = color;
+          this.io.setPixel(x, y, r, g, b);
         }
       } else if (this.cycle == 257) {
         this.nSprites = 0;
+        this.zeroHit = false;
         for (let i = 0; i < 256; i += 4) {
           let spriteY = this.oam[i];
           let size = this.control & CR.SPRITE_SIZE ? 16 : 8;
           if (this.scanline >= spriteY && this.scanline < spriteY + size) {
+            if (i == 0) {
+              this.zeroHit = true;
+            }
+            if (this.nSprites == 8) {
+              this.status |= St.OVERFLOW;
+              break;
+            }
             let j = this.nSprites * 4;
             this.sprites[j] = this.oam[i];
             this.sprites[j + 1] = this.oam[i + 1];
             this.sprites[j + 2] = this.oam[i + 2];
             this.sprites[j + 3] = this.oam[i + 3];
             this.nSprites++;
-            if (this.nSprites == 8) {
-              break;
-            }
           }
         }
       }
