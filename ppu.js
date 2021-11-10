@@ -187,6 +187,8 @@ class PPU {
             if (fgpal[value] != null) {
               let [r, g, b] = fgpal[value];
               this.io.setPixel(x, y, r, g, b);
+              // we drew a pixel so skip the rest of the sprites
+              break;
             }
           }
         }
