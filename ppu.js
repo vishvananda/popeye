@@ -96,99 +96,117 @@ class PPU {
         this.status &= ~St.VERTICAL_BLANK;
       }
       if (this.cycle >= 1 && this.cycle <= 256) {
+        let right = false;
+        if (this.cycle > 8) {
+          right == true;
+        }
         // update tile
         let [x, y] = [this.cycle - 1, this.scanline];
-        if (x % 8 == 0) {
-          let row = Math.floor(y / 8);
-          let column = x / 8;
-          let bank = (this.control & CR.BACKGROUND_PATTERN_ADDR) >> 4;
-          // get the proper nametable offset from the control register
-          let nt = (this.control & 0x03) << 10;
-          let offset = row * 32 + column;
-          let num = this.readVram(nt + offset);
-          let tile = this.cart.getTile(bank, num);
-          let finey = y % 8;
-          this.bgLo = tile[finey];
-          this.bgHi = tile[finey + 8];
+        if (
+          this.mask & Mask.BACKGROUND &&
+          (right || this.mask & Mask.BACK_LEFT)
+        ) {
+          if (x % 8 == 0) {
+            let row = Math.floor(y / 8);
+            let column = x / 8;
+            let bank = (this.control & CR.BACKGROUND_PATTERN_ADDR) >> 4;
+            // get the proper nametable offset from the control register
+            let nt = (this.control & 0x03) << 10;
+            let offset = row * 32 + column;
+            let num = this.readVram(nt + offset);
+            let tile = this.cart.getTile(bank, num);
+            let finey = y % 8;
+            this.bgLo = tile[finey];
+            this.bgHi = tile[finey + 8];
 
-          let aoffset = Math.floor(row / 4) * 8 + Math.floor(column / 4);
-          let attr = this.readVram(nt + 0x3c0 + aoffset);
-          // shift attr right based on current quadrant
-          attr >>= ((row & 0x02) << 1) | (column & 0x02);
-          // explanation for bit math above
-          // rquad = row & 0x02 (== 0b10 if row is 3rd or 4th)
-          // cquad = col & 0x02 (== 0b10 if col is 3rd or 4th)
-          // bit pairs in table are low to high (attr is 0b BR BL TR TL)
-          // BITS QUAD ((rquad << 1) | cquad)
-          // ------------------------------
-          //   10  TL    0b000 | 0b000 = 0
-          //   32  TR    0b000 | 0b010 = 2
-          //   54  BL    0b100 | 0b000 = 4
-          //   76  BR    0b100 | 0b010 = 6
-          // eqivalent to
-          // if (row % 4 > 1) {
-          //   attr >>= 0b100;
-          // }
-          // if (column % 4 > 1) {
-          //   attr >>= 0b010;
-          // }
+            let aoffset = Math.floor(row / 4) * 8 + Math.floor(column / 4);
+            let attr = this.readVram(nt + 0x3c0 + aoffset);
+            // shift attr right based on current quadrant
+            attr >>= ((row & 0x02) << 1) | (column & 0x02);
+            // explanation for bit math above
+            // rquad = row & 0x02 (== 0b10 if row is 3rd or 4th)
+            // cquad = col & 0x02 (== 0b10 if col is 3rd or 4th)
+            // bit pairs in table are low to high (attr is 0b BR BL TR TL)
+            // BITS QUAD ((rquad << 1) | cquad)
+            // ------------------------------
+            //   10  TL    0b000 | 0b000 = 0
+            //   32  TR    0b000 | 0b010 = 2
+            //   54  BL    0b100 | 0b000 = 4
+            //   76  BR    0b100 | 0b010 = 6
+            // eqivalent to
+            // if (row % 4 > 1) {
+            //   attr >>= 0b100;
+            // }
+            // if (column % 4 > 1) {
+            //   attr >>= 0b010;
+            // }
 
-          // use bottom two bytes to find palette index
-          let start = 0x01 + (attr & 0x03) * 4;
-          this.bgpal = [
-            this.pal[this.palette[0]],
-            this.pal[this.palette[start]],
-            this.pal[this.palette[start + 1]],
-            this.pal[this.palette[start + 2]],
-          ];
-        }
-        // hi bit from msb of second plane
-        let value = ((0x80 & this.bgHi) >> 6) | ((0x80 & this.bgLo) >> 7);
-        // shift planes
-        this.bgHi <<= 1;
-        this.bgLo <<= 1;
-        // get the right color
-        let [r, g, b] = this.bgpal[value];
-
-        this.io.setPixel(x, y, r, g, b);
-
-        // check for sprites
-        for (let n = 0; n < this.nSprites; n++) {
-          let i = n * 4;
-          let spriteX = this.sprites[i + 3];
-          let attr = this.sprites[i + 2];
-          // TODO: remove this hack for background detection
-          if (attr & SpriteByteTwo.PRIORITY) {
-            continue;
-          }
-          if (x >= spriteX && x < spriteX + 8) {
-            let finey = y - this.sprites[i] - 1;
-            // TODO: 16 bit sprites
-            if (attr & SpriteByteTwo.FLIP_VERTICAL) {
-              finey = 7 - finey;
-            }
-            let bank = (this.control & CR.SPRITE_PATTERN_ADDR) >> 3;
-            let tile = this.cart.getTile(bank, this.sprites[i + 1]);
-            let finex = x - spriteX;
-            if (attr & SpriteByteTwo.FLIP_HORIZONTAL) {
-              finex = 7 - finex;
-            }
-            let lo = tile[finey] << finex;
-            let hi = tile[finey + 8] << finex;
-            // foreground palettes are the last 4
-            let start = 0x11 + (this.sprites[i + 2] & 0x03) * 4;
-            let fgpal = [
-              null,
+            // use bottom two bytes to find palette index
+            let start = 0x01 + (attr & 0x03) * 4;
+            this.bgpal = [
+              this.pal[this.palette[0]],
               this.pal[this.palette[start]],
               this.pal[this.palette[start + 1]],
               this.pal[this.palette[start + 2]],
             ];
-            let value = ((0x80 & hi) >> 6) | ((0x80 & lo) >> 7);
-            if (fgpal[value] != null) {
-              let [r, g, b] = fgpal[value];
-              this.io.setPixel(x, y, r, g, b);
-              // we drew a pixel so skip the rest of the sprites
-              break;
+          }
+
+          // hi bit from msb of second plane
+          let value = ((0x80 & this.bgHi) >> 6) | ((0x80 & this.bgLo) >> 7);
+          // shift planes
+          this.bgHi <<= 1;
+          this.bgLo <<= 1;
+          // get the right color
+          let [r, g, b] = this.bgpal[value];
+
+          this.io.setPixel(x, y, r, g, b);
+        } else {
+          this.io.setPixel(x, y, 0, 0, 0);
+        }
+
+        if (
+          this.mask & Mask.SPRITE &&
+          (right || this.mask & Mask.SPRITE_LEFT)
+        ) {
+          // check for sprites
+          for (let n = 0; n < this.nSprites; n++) {
+            let i = n * 4;
+            let spriteX = this.sprites[i + 3];
+            let attr = this.sprites[i + 2];
+            // TODO: remove this hack for background detection
+            if (attr & SpriteByteTwo.PRIORITY) {
+              continue;
+            }
+            if (x >= spriteX && x < spriteX + 8) {
+              // sprites are delayed by one scanline
+              let finey = this.scanline - 1 - this.sprites[i];
+              // TODO: 16 bit sprites
+              if (attr & SpriteByteTwo.FLIP_VERTICAL) {
+                finey = 7 - finey;
+              }
+              let bank = (this.control & CR.SPRITE_PATTERN_ADDR) >> 3;
+              let tile = this.cart.getTile(bank, this.sprites[i + 1]);
+              let finex = x - spriteX;
+              if (attr & SpriteByteTwo.FLIP_HORIZONTAL) {
+                finex = 7 - finex;
+              }
+              let lo = tile[finey] << finex;
+              let hi = tile[finey + 8] << finex;
+              // foreground palettes are the last 4
+              let start = 0x11 + (this.sprites[i + 2] & 0x03) * 4;
+              let fgpal = [
+                null,
+                this.pal[this.palette[start]],
+                this.pal[this.palette[start + 1]],
+                this.pal[this.palette[start + 2]],
+              ];
+              let value = ((0x80 & hi) >> 6) | ((0x80 & lo) >> 7);
+              if (fgpal[value] != null) {
+                let [r, g, b] = fgpal[value];
+                this.io.setPixel(x, y, r, g, b);
+                // we drew a pixel so skip the rest of the sprites
+                break;
+              }
             }
           }
         }

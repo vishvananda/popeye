@@ -268,9 +268,9 @@ class Nes6502 {
 
     this.clearStatus(St.BREAK);
     this.setStatus(St.UN);
-    this.setStatus(St.INTD);
     this.write(0x100 | this.Stack, this.Status);
     this.Stack--;
+    this.setStatus(St.INTD);
 
     let lo = this.read(0xfffa);
     let hi = this.read(0xfffb);
