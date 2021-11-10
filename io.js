@@ -254,7 +254,7 @@ class IO {
       );
 
       this.gl.uniform1i(this.textureLocation, 0);
-      // Draw 6 vertexes => 2 trianthis.gles:
+      // Draw 6 vertexes => 2 triangles:
       this.gl.drawArrays(this.gl.TRIANGLES, 0, 6);
 
       this.gl.bindTexture(this.gl.TEXTURE_2D, null);

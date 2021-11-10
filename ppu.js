@@ -23,6 +23,12 @@ const Mask = {
   BLUE: 1 << 7,
 };
 
+const Mirror = {
+  VERTICAL: 1 << 0,
+  HORIZONTAL: 1 << 1,
+  FOUR_SCREEN: 1 << 2,
+};
+
 const St = {
   OVERFLOW: 1 << 5,
   SPRITE_ZERO: 1 << 6,
@@ -76,17 +82,17 @@ class PPU {
           let row = Math.floor(y / 8);
           let column = x / 8;
           let bank = (this.control & CR.BACKGROUND_PATTERN_ADDR) >> 4;
+          // get the proper nametable offset from the control register
+          let nt = (this.control & 0x03) << 10;
           let offset = row * 32 + column;
-          // using first nametable
-          let num = this.vram[offset];
+          let num = this.readVram(nt + offset);
           let tile = this.cart.getTile(bank, num);
           let finey = y % 8;
           this.bgLo = tile[finey];
           this.bgHi = tile[finey + 8];
 
           let aoffset = Math.floor(row / 4) * 8 + Math.floor(column / 4);
-          // using first nametable
-          let attr = this.vram[0x3c0 + aoffset];
+          let attr = this.readVram(nt + 0x3c0 + aoffset);
           // shift attr right based on current quadrant
           attr >>= ((row & 0x02) << 1) | (column & 0x02);
           // explanation for bit math above
@@ -160,7 +166,7 @@ class PPU {
   loadCart(cart) {
     this.cart = cart;
     this.palette = new Uint8Array(32);
-    this.vram = new Uint8Array(2048);
+    this.vram = [new Uint8Array(1024), new Uint8Array(1024)];
     this.oam = new Uint8Array(256);
     this.mirroring = cart.mirroring;
   }
@@ -200,6 +206,34 @@ class PPU {
     this.addr &= 0x3fff;
   }
 
+  readVram(addr) {
+    let table = 0;
+    if (this.mirroring == Mirror.VERTICAL) {
+      // table = 0 if 0b0000 - 0b0011
+      // table = 1 if 0b0100 - 0b0111
+      //         0    0b1000 - 0b1011
+      //         1    0b1100 - 0b1111
+      table = addr & 0x0400 ? 1 : 0;
+    } else if (this.mirroring == Mirror.HORIZONTAL) {
+      // table = 0 if 0b0000 - 0b0011
+      // table = 0 if 0b0100 - 0b0111
+      //         1    0b1000 - 0b1011
+      //         1    0b1100 - 0b1111
+      table = addr & 0x0800 ? 1 : 0;
+    }
+    return this.vram[table][addr & 0x03ff];
+  }
+
+  writeVram(addr, data) {
+    let table = 0;
+    if (this.mirroring == Mirror.VERTICAL) {
+      table = addr & 0x0400 ? 1 : 0;
+    } else if (this.mirroring == Mirror.HORIZONTAL) {
+      table = addr & 0x0800 ? 1 : 0;
+    }
+    this.vram[table][addr & 0x03ff] = data;
+  }
+
   readData() {
     let addr = this.addr;
     this.incAddr();
@@ -208,20 +242,19 @@ class PPU {
       let result = this.buffer;
       this.buffer = this.cart.chr[addr];
       return result;
-    } else if (addr >= 0x2000 && addr <= 0x2fff) {
-      // read from ram
-      // TODO: mirroring
+    } else if (addr >= 0x2000 && addr <= 0x3eff) {
+      // read from vram
       let result = this.buffer;
-      this.buffer = this.vram[addr - 0x2000];
+      this.buffer = this.readVram(addr);
       return result;
-    } else if (addr >= 0x3000 && addr <= 0x3eff) {
-      console.log("illegal read " + hex.toHex16(addr));
-      process.exit(1);
     } else if (addr >= 0x3f00 && addr <= 0x3fff) {
-      // sets internal buffer from weird address
-      this.buffer = this.vram[addr - 0x1000];
+      // TODO: sets internal buffer from weird address
+      // this.buffer = this.vram[addr & 0x0fff];
       // $3F10/$3F14/$3F18/$3F1C are mirrors of $3F00/$3F04/$3F08/$3F0C
-      return this.palette[addr - 0x3f00];
+      if ((addr & 0xf3) == 0x10) {
+        addr -= 0x10;
+      }
+      return this.palette[addr & 0xff];
     } else {
       console.log("oops broken mirroring " + hex.toHex16(addr));
       process.exit(1);
@@ -251,15 +284,9 @@ class PPU {
     let addr = this.addr;
     this.incAddr();
     if (addr >= 0x0000 && addr <= 0x1fff) {
-      console.log("illegal write to chr data " + hex.toHex16(addr));
-      process.exit(1);
-    } else if (addr >= 0x2000 && addr <= 0x2fff) {
-      // write to ram
-      // TODO: mirroring
-      this.vram[addr - 0x2000] = data;
-    } else if (addr >= 0x3000 && addr <= 0x3eff) {
-      console.log("illegal write " + hex.toHex16(addr));
-      process.exit(1);
+      // TODO: handle CHR RAM?
+    } else if (addr >= 0x2000 && addr <= 0x3eff) {
+      this.writeVram(addr, data);
     } else if (addr >= 0x3f00 && addr <= 0x3fff) {
       // $3F10/$3F14/$3F18/$3F1C are mirrors of $3F00/$3F04/$3F08/$3F0C
       if ((addr & 0xf3) == 0x10) {
@@ -274,7 +301,7 @@ class PPU {
       // f5 = 1111 01 01
       // ---------------
       // f1 = 1111 00 01
-      this.palette[addr - 0x3f00] = data;
+      this.palette[addr & 0xff] = data;
     } else {
       console.log("oops broken mirroring " + hex.toHex16(addr));
       process.exit(1);
