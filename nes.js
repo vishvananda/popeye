@@ -125,6 +125,9 @@ function handleKey(key) {
       // run
       running = !running;
       break;
+    case "y":
+      bus.reset();
+      break;
     default:
       return false;
   }

@@ -24,9 +24,9 @@ const Mask = {
 };
 
 const Mirror = {
-  VERTICAL: 1 << 0,
-  HORIZONTAL: 1 << 1,
-  FOUR_SCREEN: 1 << 2,
+  HORIZONTAL: 0,
+  VERTICAL: 1,
+  FOUR_SCREEN: 2,
 };
 
 const St = {

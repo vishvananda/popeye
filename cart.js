@@ -21,9 +21,9 @@ class Cart {
       process.exit(1);
     }
     if ((data[6] & 0x08) != 0) {
-      this.mirror = Mirror.FOUR_SCREEN;
+      this.mirroring = Mirror.FOUR_SCREEN;
     } else {
-      this.mirror = data[6] & 0x01;
+      this.mirroring = data[6] & 0x01;
     }
 
     let prg_size = data[4] * PRG_PAGE_SIZE;
@@ -62,9 +62,9 @@ class Cart {
 }
 
 const Mirror = {
-  VERTICAL: 1 << 0,
-  HORIZONTAL: 1 << 1,
-  FOUR_SCREEN: 1 << 2,
+  HORIZONTAL: 0,
+  VERTICAL: 1,
+  FOUR_SCREEN: 2,
 };
 
 module.exports = Cart;
