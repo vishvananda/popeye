@@ -79,7 +79,7 @@ class PPU {
     this.buffer = 0;
     this.x = 0;
     this.y = 0;
-    this.scrollx = true;
+    this.latch = false;
     this.cycle = 0;
     this.scanline = 0;
     this.bgLo = 0;
@@ -370,7 +370,7 @@ class PPU {
       return result;
     } else if (addr >= 0x3f00 && addr <= 0x3fff) {
       // TODO: sets internal buffer from weird address
-      // this.buffer = this.vram[addr & 0x0fff];
+      this.buffer = this.readVram(addr & 0x3eff);
       // $3F10/$3F14/$3F18/$3F1C are mirrors of $3F00/$3F04/$3F08/$3F0C
       if ((addr & 0xf3) == 0x10) {
         addr -= 0x10;
@@ -382,20 +382,10 @@ class PPU {
     }
   }
 
-  writeAddr(data) {
-    if (this.addrHi) {
-      this.addr = (this.addr & 0x00ff) | (data << 8);
-    } else {
-      this.addr = (this.addr & 0xff00) | data;
-    }
-    this.addrHi = !this.addrHi;
-  }
-
   readStatus() {
-    let status = this.status;
+    let status = (this.status & 0xe0) | (this.buffer & 0x1f);
     // reset addr latch
-    this.addr = 0;
-    this.addrHi = true;
+    this.latch = false;
     // clear vblank;
     this.status &= ~St.VERTICAL_BLANK;
     return status;
@@ -443,7 +433,7 @@ class PPU {
         return this.readData();
       default:
         console.log("read from unknown ppu register " + hex.toHex16(address));
-        process.exit(1);
+      // process.exit(1);
     }
   }
   write(address, data) {
@@ -451,6 +441,8 @@ class PPU {
     switch (address) {
       case 0x2000:
         this.control = data;
+        // write bits 10/11 of taddr from nametable
+        this.taddr |= (data & 0x03) << 11;
         break;
       case 0x2001:
         this.mask = data;
@@ -466,25 +458,47 @@ class PPU {
         this.oamAddr &= 0xff;
         break;
       case 0x2005:
-        // Scroll
-        if (this.scrollx) {
-          this.x = data;
+        // scroll
+        if (!this.latch) {
+          // fny ny nx  crsy   crsx
+          // 000 0  0   00000  00000
+          // write course x
+          this.taddr &= 0x7fe0;
+          this.taddr |= data >> 3;
+          this.finex = data & 0x07;
         } else {
-          this.y = data;
+          // mask out fine y and course y
+          this.taddr &= 0xc1f;
+          // write fine y
+          this.taddr |= (data & 0x07) << 12;
+          // write course y
+          this.taddr |= (data & 0xf8) << 2;
         }
-        this.scrollx = !this.scrollx;
+        this.latch = !this.latch;
         break;
       case 0x2006:
-        // address register
-        this.writeAddr(data);
+        // address
+        if (!this.latch) {
+          this.taddr &= 0x00ff;
+          this.taddr |= (data & 0x3f) << 8;
+        } else {
+          this.taddr &= 0x7f00;
+          this.taddr |= data;
+          this.addr = this.taddr;
+        }
+        this.latch = !this.latch;
         break;
       case 0x2007:
         // data register
         this.writeData(data);
         break;
       default:
-        console.log("write to unknown ppu register " + hex.toHex16(address));
-        process.exit(1);
+        console.log(
+          "write to unknown ppu register",
+          hex.toHex16(address),
+          hex.toHex8(data)
+        );
+      // process.exit(1);
     }
   }
 }

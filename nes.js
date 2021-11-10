@@ -178,5 +178,5 @@ io.registerKeyPressHandler(handleKey);
 bus.loadRom("pacman.nes");
 // clear log
 fs.writeFileSync(LOG, "");
-dump();
+// dump();
 run();
