@@ -34,6 +34,25 @@ const St = {
   SPRITE_ZERO: 1 << 6,
   VERTICAL_BLANK: 1 << 7,
 };
+// 76543210
+// ||||||||
+// |||||||+- Bank ($0000 or $1000) of tiles
+// +++++++-- Tile number of top of sprite (0 to 254; bottom half gets the next tile)
+const SpriteByteOne = {
+  BANK: 1 << 0,
+};
+// 76543210
+// ||||||||
+// ||||||++- Palette (4 to 7) of sprite
+// |||+++--- Unimplemented
+// ||+------ Priority (0: in front of background; 1: behind background)
+// |+------- Flip sprite horizontally
+// +-------- Flip sprite vertically
+const SpriteByteTwo = {
+  PRIORITY: 1 << 5,
+  FLIP_HORIZONTAL: 1 << 6,
+  FLIP_VERTICAL: 1 << 7,
+};
 
 class PPU {
   constructor(io, palette = "nes.pal") {
@@ -67,6 +86,7 @@ class PPU {
     this.bgHi = 0;
     this.bgpal = null;
     this.nmi = false;
+    this.sprites = new Uint8Array(32);
   }
 
   tick() {
@@ -114,7 +134,7 @@ class PPU {
           // }
 
           // use bottom two bytes to find palette index
-          let start = 1 + (attr & 0x03) * 4;
+          let start = 0x01 + (attr & 0x03) * 4;
           this.bgpal = [
             this.pal[this.palette[0]],
             this.pal[this.palette[start]],
@@ -122,7 +142,6 @@ class PPU {
             this.pal[this.palette[start + 2]],
           ];
         }
-
         // hi bit from msb of second plane
         let value = ((0x80 & this.bgHi) >> 6) | ((0x80 & this.bgLo) >> 7);
         // shift planes
@@ -132,6 +151,62 @@ class PPU {
         let [r, g, b] = this.bgpal[value];
 
         this.io.setPixel(x, y, r, g, b);
+
+        // check for sprites
+        for (let n = 0; n < this.nSprites; n++) {
+          let i = n * 4;
+          let spriteX = this.sprites[i + 3];
+          let attr = this.sprites[i + 2];
+          // TODO: remove this hack for background detection
+          if (attr & SpriteByteTwo.PRIORITY) {
+            continue;
+          }
+          if (x >= spriteX && x < spriteX + 8) {
+            let finey = y - this.sprites[i] - 1;
+            // TODO: 16 bit sprites
+            if (attr & SpriteByteTwo.FLIP_VERTICAL) {
+              finey = 7 - finey;
+            }
+            let bank = (this.control & CR.SPRITE_PATTERN_ADDR) >> 3;
+            let tile = this.cart.getTile(bank, this.sprites[i + 1]);
+            let finex = x - spriteX;
+            if (attr & SpriteByteTwo.FLIP_HORIZONTAL) {
+              finex = 7 - finex;
+            }
+            let lo = tile[finey] << finex;
+            let hi = tile[finey + 8] << finex;
+            // foreground palettes are the last 4
+            let start = 0x11 + (this.sprites[i + 2] & 0x03) * 4;
+            let fgpal = [
+              null,
+              this.pal[this.palette[start]],
+              this.pal[this.palette[start + 1]],
+              this.pal[this.palette[start + 2]],
+            ];
+            let value = ((0x80 & hi) >> 6) | ((0x80 & lo) >> 7);
+            if (fgpal[value] != null) {
+              let [r, g, b] = fgpal[value];
+              this.io.setPixel(x, y, r, g, b);
+            }
+          }
+        }
+      } else if (this.cycle == 257) {
+        this.nSprites = 0;
+        for (let i = 0; i < 256; i += 4) {
+          let spriteY = this.oam[i];
+          let size = this.control & CR.SPRITE_SIZE ? 16 : 8;
+          if (this.scanline >= spriteY && this.scanline < spriteY + size) {
+            let j = this.nSprites * 4;
+            this.sprites[j] = this.oam[i];
+            this.sprites[j + 1] = this.oam[i + 1];
+            this.sprites[j + 2] = this.oam[i + 2];
+            this.sprites[j + 3] = this.oam[i + 3];
+            this.nSprites++;
+            if (this.nSprites == 8) {
+              break;
+            }
+          }
+        }
       }
     }
 
@@ -340,6 +415,7 @@ class PPU {
         break;
       case 0x2004:
         // OAM Data
+        console.log("wrote oam data", this.oamAddr, data);
         this.oam[this.oamAddr] = data;
         this.oamAddr++;
         this.oamAddr &= 0xff;

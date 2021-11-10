@@ -17,33 +17,25 @@ var cycles = 0;
 const LOG = "debug.log";
 const CANONICAL_LOG = "canonical.nestest.log";
 
-function tick() {
-  cycles++;
-  ppu.tick();
-  if (cycles % 3 == 0) {
-    let bLog = debug || validate;
-    let log = cpu.tick(bLog);
-    if (log !== undefined && bLog) {
-      let s = ("   " + ppu.scanline).slice(-3);
-      let p = ("   " + ppu.cycle).slice(-3);
-      log = log.replace("%ppu", s + "," + p);
-      fs.appendFileSync(LOG, log + "\n");
-      if (validate) {
-        let line = logs[linenum++].trim();
-        if (log != line) {
-          console.log("ERROR ON LINE ", linenum);
-          console.log(`OURS:   '${log}'`);
-          console.log(`THEIRS: '${line}'`);
-          console.log(`CYCLES: '${cycles}'`);
-          process.exit(1);
-        }
-      }
+function logCallback(log) {
+  fs.appendFileSync(LOG, log + "\n");
+  if (validate) {
+    let line = logs[linenum++].trim();
+    if (log != line) {
+      console.log("ERROR ON LINE ", linenum);
+      console.log(`OURS:   '${log}'`);
+      console.log(`THEIRS: '${line}'`);
+      console.log(`CYCLES: '${cycles}'`);
+      process.exit(1);
     }
   }
+}
 
-  if (ppu.nmi) {
-    ppu.nmi = false;
-    cpu.nmi();
+function tick() {
+  if (debug) {
+    bus.tick(logCallback);
+  } else {
+    bus.tick();
   }
 }
 
