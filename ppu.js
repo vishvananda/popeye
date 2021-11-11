@@ -77,8 +77,6 @@ class PPU {
     this.addrHi = true;
     this.oamAddr = 0;
     this.buffer = 0;
-    this.x = 0;
-    this.y = 0;
     this.latch = false;
     this.cycle = 0;
     this.scanline = 0;
@@ -88,7 +86,51 @@ class PPU {
     this.nmi = false;
     this.sprites = new Uint8Array(32);
     this.odd = false;
+    this.finey = 0;
     this.zeroHit = false;
+  }
+
+  populate(table, x, y) {
+    let row = Math.floor(y / 8);
+    let column = x / 8;
+    let bank = (this.control & CR.BACKGROUND_PATTERN_ADDR) >> 4;
+    let offset = row * 32 + column;
+    let num = this.vram[table][offset];
+    let tile = this.cart.getTile(bank, num);
+    let finey = y % 8;
+    this.bgLo = tile[finey];
+    this.bgHi = tile[finey + 8];
+
+    let aoffset = Math.floor(row / 4) * 8 + Math.floor(column / 4);
+    let attr = this.vram[table][0x3c0 + aoffset];
+    // shift attr right based on current quadrant
+    attr >>= ((row & 0x02) << 1) | (column & 0x02);
+    // explanation for bit math above
+    // rquad = row & 0x02 (== 0b10 if row is 3rd or 4th)
+    // cquad = col & 0x02 (== 0b10 if col is 3rd or 4th)
+    // bit pairs in table are low to high (attr is 0b BR BL TR TL)
+    // BITS QUAD ((rquad << 1) | cquad)
+    // ------------------------------
+    //   10  TL    0b000 | 0b000 = 0
+    //   32  TR    0b000 | 0b010 = 2
+    //   54  BL    0b100 | 0b000 = 4
+    //   76  BR    0b100 | 0b010 = 6
+    // eqivalent to
+    // if (row % 4 > 1) {
+    //   attr >>= 0b100;
+    // }
+    // if (column % 4 > 1) {
+    //   attr >>= 0b010;
+    // }
+
+    // use bottom two bytes to find palette index
+    let start = 0x01 + (attr & 0x03) * 4;
+    this.bgpal = [
+      null,
+      this.pal[this.palette[start]],
+      this.pal[this.palette[start + 1]],
+      this.pal[this.palette[start + 2]],
+    ];
   }
 
   tick() {
@@ -114,49 +156,29 @@ class PPU {
         let front = true;
         // update tile
         let [x, y] = [this.cycle - 1, this.scanline];
+
+        // TODO: these should be transfered to this.addr and updated dynamically
+        let scrollx = ((this.taddr & 0x1f) << 3) | this.finex;
+        let finey = (this.taddr & 0x7000) >> 12;
+        let scrolly = ((this.taddr & 0x3e0) >> 2) | finey;
+        let table = (this.taddr >> 11) & 0x03;
+
+        if (this.mirroring == Mirror.VERTICAL) {
+          // 0 -> 0
+          // 1 -> 1
+          // 2 -> 0
+          // 3 -> 1
+          table &= 0x01;
+        } else if (this.mirroring == Mirror.HORIZONTAL) {
+          // 0 -> 0
+          // 1 -> 0
+          // 2 -> 1
+          // 3 -> 1
+          table >>= 1;
+        }
         if (x % 8 == 0) {
-          let row = Math.floor(y / 8);
-          let column = x / 8;
-          let bank = (this.control & CR.BACKGROUND_PATTERN_ADDR) >> 4;
           // get the proper nametable offset from the control register
-          let nt = (this.control & 0x03) << 10;
-          let offset = row * 32 + column;
-          let num = this.readVram(nt + offset);
-          let tile = this.cart.getTile(bank, num);
-          let finey = y % 8;
-          this.bgLo = tile[finey];
-          this.bgHi = tile[finey + 8];
-
-          let aoffset = Math.floor(row / 4) * 8 + Math.floor(column / 4);
-          let attr = this.readVram(nt + 0x3c0 + aoffset);
-          // shift attr right based on current quadrant
-          attr >>= ((row & 0x02) << 1) | (column & 0x02);
-          // explanation for bit math above
-          // rquad = row & 0x02 (== 0b10 if row is 3rd or 4th)
-          // cquad = col & 0x02 (== 0b10 if col is 3rd or 4th)
-          // bit pairs in table are low to high (attr is 0b BR BL TR TL)
-          // BITS QUAD ((rquad << 1) | cquad)
-          // ------------------------------
-          //   10  TL    0b000 | 0b000 = 0
-          //   32  TR    0b000 | 0b010 = 2
-          //   54  BL    0b100 | 0b000 = 4
-          //   76  BR    0b100 | 0b010 = 6
-          // eqivalent to
-          // if (row % 4 > 1) {
-          //   attr >>= 0b100;
-          // }
-          // if (column % 4 > 1) {
-          //   attr >>= 0b010;
-          // }
-
-          // use bottom two bytes to find palette index
-          let start = 0x01 + (attr & 0x03) * 4;
-          this.bgpal = [
-            null,
-            this.pal[this.palette[start]],
-            this.pal[this.palette[start + 1]],
-            this.pal[this.palette[start + 2]],
-          ];
+          this.populate(table, x, y);
         }
         if (
           this.mask & Mask.BACKGROUND &&
@@ -220,10 +242,8 @@ class PPU {
 
           // start with the background color
           let color = this.pal[this.palette[0]];
-          if (fg != null) {
-            if (front || bg == null) {
-              color = fg;
-            }
+          if (fg != null && (front || bg == null)) {
+            color = fg;
           } else if (bg != null) {
             color = bg;
           }
@@ -441,8 +461,9 @@ class PPU {
     switch (address) {
       case 0x2000:
         this.control = data;
-        // write bits 10/11 of taddr from nametable
-        this.taddr |= (data & 0x03) << 11;
+        // write bits 10/11 of taddr from control nametable
+        this.taddr &= 0xf3ff;
+        this.taddr |= (this.control & 0x03) << 11;
         break;
       case 0x2001:
         this.mask = data;
