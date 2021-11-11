@@ -167,7 +167,7 @@ class PPU {
         let scrollx = ((this.taddr & 0x1f) << 3) | this.finex;
         let finey = (this.taddr & 0x7000) >> 12;
         let scrolly = ((this.taddr & 0x3e0) >> 2) | finey;
-        let table = (this.taddr >> 11) & 0x03;
+        let table = (this.taddr >> 10) & 0x03;
 
         let xTot = scrollx + x;
         let yTot = scrolly + y;
@@ -514,7 +514,7 @@ class PPU {
         this.control = data;
         // write bits 10/11 of taddr from control nametable
         this.taddr &= 0xf3ff;
-        this.taddr |= (this.control & 0x03) << 11;
+        this.taddr |= (this.control & 0x03) << 10;
         break;
       case 0x2001:
         this.mask = data;
