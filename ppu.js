@@ -92,7 +92,7 @@ class PPU {
 
   populate(table, x, y) {
     let row = Math.floor(y / 8);
-    let column = x / 8;
+    let column = Math.floor(x / 8);
     let bank = (this.control & CR.BACKGROUND_PATTERN_ADDR) >> 4;
     let offset = row * 32 + column;
     let num = this.vram[table][offset];
@@ -176,10 +176,26 @@ class PPU {
           // 3 -> 1
           table >>= 1;
         }
-        if (x % 8 == 0) {
-          // get the proper nametable offset from the control register
-          this.populate(table, x, y);
+        let xTot = scrollx + x;
+        if (xTot > 255) {
+          table = 1 - table;
+          xTot -= 256;
         }
+        let yTot = scrolly + y;
+        if (yTot > 239) {
+          table = 1 - table;
+          yTot -= 240;
+        }
+        if (xTot % 8 == 0) {
+          // get the proper nametable offset from the control register
+          this.populate(table, xTot, yTot);
+        } else if (x == 0) {
+          let scrollxOff = xTot % 8;
+          this.populate(table, xTot, yTot);
+          this.bgHi <<= scrollxOff;
+          this.bgLo <<= scrollxOff;
+        }
+
         if (
           this.mask & Mask.BACKGROUND &&
           (right || this.mask & Mask.BACK_LEFT)
