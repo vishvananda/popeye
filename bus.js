@@ -80,7 +80,8 @@ class Bus {
           if (this.cycles % 2 == 0) {
             this.dmadata = this.read((this.dmapage << 8) | this.dmaaddr);
           } else {
-            this.ppu.oam[this.dmaaddr] = this.dmadata;
+            let actual = (this.dmaaddr + this.ppu.oamAddr) & 0xff;
+            this.ppu.oam[actual] = this.dmadata;
             this.dmaaddr++;
             if (this.dmaaddr > 255) {
               this.dma = false;
