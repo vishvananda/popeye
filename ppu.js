@@ -146,7 +146,7 @@ class PPU {
         this.status &= ~St.OVERFLOW;
         this.status &= ~St.SPRITE_ZERO;
       }
-      if (this.cycle >= 1 && this.cycle <= 256) {
+      if (this.scanline >= 0 && this.cycle >= 1 && this.cycle <= 256) {
         let right = false;
         if (this.cycle > 8) {
           right == true;
@@ -255,18 +255,18 @@ class PPU {
               }
             }
           }
-
-          // start with the background color
-          let color = this.pal[this.palette[0]];
-          if (fg != null && (front || bg == null)) {
-            color = fg;
-          } else if (bg != null) {
-            color = bg;
-          }
-
-          let [r, g, b] = color;
-          this.io.setPixel(x, y, r, g, b);
         }
+
+        // start with the background color
+        let color = this.pal[this.palette[0]];
+        if (fg != null && (front || bg == null)) {
+          color = fg;
+        } else if (bg != null) {
+          color = bg;
+        }
+
+        let [r, g, b] = color;
+        this.io.setPixel(x, y, r, g, b);
       } else if (this.cycle == 257) {
         this.nSprites = 0;
         this.zeroHit = false;
@@ -431,7 +431,8 @@ class PPU {
     let addr = this.addr;
     this.incAddr();
     if (addr >= 0x0000 && addr <= 0x1fff) {
-      // TODO: handle CHR RAM?
+      // read from chr
+      this.cart.chr[addr] = data;
     } else if (addr >= 0x2000 && addr <= 0x3eff) {
       this.writeVram(addr, data);
     } else if (addr >= 0x3f00 && addr <= 0x3fff) {
@@ -469,7 +470,7 @@ class PPU {
         return this.readData();
       default:
         console.log("read from unknown ppu register " + hex.toHex16(address));
-      // process.exit(1);
+        return 0xff;
     }
   }
   write(address, data) {

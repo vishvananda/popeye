@@ -36,7 +36,13 @@ class Cart {
     }
     let chr_start = prg_start + prg_size;
     this.prg = data.slice(prg_start, prg_start + prg_size);
-    this.chr = data.slice(chr_start, chr_start + chr_size);
+    if (chr_size == 0) {
+      // chr ram
+      console.log("using chr ram");
+      this.chr = new Uint8Array(0x2000);
+    } else {
+      this.chr = data.slice(chr_start, chr_start + chr_size);
+    }
   }
 
   read(address) {

@@ -265,13 +265,13 @@ class Nes6502 {
 
     this.setStatus(St.INTD);
     this.write(0x100 | this.Stack, this.PC >> 8);
-    this.Stack--;
+    this.decStack();
     this.write(0x100 | this.Stack, this.PC & 0xff);
-    this.Stack--;
+    this.decStack();
 
     this.setStatus(St.BREAK);
     this.write(0x100 | this.Stack, this.Status);
-    this.Stack--;
+    this.decStack();
     this.clearStatus(St.BREAK);
 
     let lo = this.read(0xfffe);
@@ -282,14 +282,14 @@ class Nes6502 {
 
   nmi() {
     this.write(0x100 | this.Stack, this.PC >> 8);
-    this.Stack--;
+    this.decStack();
     this.write(0x100 | this.Stack, this.PC & 0xff);
-    this.Stack--;
+    this.decStack();
 
     this.clearStatus(St.BREAK);
     this.setStatus(St.UN);
     this.write(0x100 | this.Stack, this.Status);
-    this.Stack--;
+    this.decStack();
     this.setStatus(St.INTD);
 
     let lo = this.read(0xfffa);
@@ -518,6 +518,22 @@ class Nes6502 {
     return 2;
   }
 
+  decStack() {
+    this.Stack--;
+    if (this.Stack < 0) {
+      console.log("stack overflow");
+      this.Stack &= 0xff;
+    }
+  }
+
+  incStack() {
+    this.Stack++;
+    if (this.Stack > 0xff) {
+      console.log("stack underflow");
+      this.Stack &= 0xff;
+    }
+  }
+
   push(source) {
     let val = this[source];
     if (source == "Status") {
@@ -525,12 +541,12 @@ class Nes6502 {
       val |= 0x30;
     }
     this.write(0x100 | this.Stack, val);
-    this.Stack--;
+    this.decStack();
     return 3;
   }
 
   pull(source) {
-    this.Stack++;
+    this.incStack();
     let val = this.read(0x100 | this.Stack);
     if (source == "Status") {
       // always set break and un
@@ -562,9 +578,9 @@ class Nes6502 {
     // so set the return value to the last byte of the address
     let ret = this.PC + 1;
     this.write(0x100 | this.Stack, ret >> 8);
-    this.Stack--;
+    this.decStack();
     this.write(0x100 | this.Stack, ret & 0xff);
-    this.Stack--;
+    this.decStack();
     return this.jmp(Mode.ABS, 6);
   }
 
@@ -581,9 +597,9 @@ class Nes6502 {
   }
 
   jumpStack(offset) {
-    this.Stack++;
+    this.incStack();
     let lo = this.read(0x100 | this.Stack);
-    this.Stack++;
+    this.incStack();
     let hi = this.read(0x100 | this.Stack);
     this.PC = ((hi << 8) | lo) + offset;
     return 6;
@@ -699,7 +715,12 @@ class Nes6502 {
       let ins = this.read(this.PC);
       let parts = this.lookup[ins];
       if (parts === undefined) {
-        console.log("unknown instruction", hex.toHex8(ins));
+        console.log(
+          "unknown instruction",
+          hex.toHex16(this.PC),
+          ins !== undefined ? hex.toHex8(ins) : "XX"
+        );
+        this.bus.output();
         process.exit(1);
       }
       let [mne, len, fn, ...args] = parts;
