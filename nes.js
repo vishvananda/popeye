@@ -130,6 +130,12 @@ function handleKey(key) {
     case "y":
       bus.reset();
       break;
+    case "1":
+      ppu.drawNT(0);
+      break;
+    case "2":
+      ppu.drawNT(1);
+      break;
     default:
       return false;
   }

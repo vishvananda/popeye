@@ -132,6 +132,12 @@ class PPU {
       this.pal[this.palette[start + 2]],
     ];
   }
+  values(table, x, y) {
+    let row = Math.floor(y / 8);
+    let column = Math.floor(x / 8);
+    let offset = row * 32 + column;
+    console.log(table, row, column, hex.toHex16(offset));
+  }
 
   tick() {
     if (this.scanline >= -1 && this.scanline < 240) {
@@ -163,27 +169,32 @@ class PPU {
         let scrolly = ((this.taddr & 0x3e0) >> 2) | finey;
         let table = (this.taddr >> 11) & 0x03;
 
+        let xTot = scrollx + x;
+        let yTot = scrolly + y;
         if (this.mirroring == Mirror.VERTICAL) {
           // 0 -> 0
           // 1 -> 1
           // 2 -> 0
           // 3 -> 1
           table &= 0x01;
+          if (xTot > 255) {
+            table = 1 - table;
+          }
         } else if (this.mirroring == Mirror.HORIZONTAL) {
           // 0 -> 0
           // 1 -> 0
           // 2 -> 1
           // 3 -> 1
           table >>= 1;
+          if (yTot > 239) {
+            table = 1 - table;
+          }
         }
-        let xTot = scrollx + x;
+
         if (xTot > 255) {
-          table = 1 - table;
           xTot -= 256;
         }
-        let yTot = scrolly + y;
         if (yTot > 239) {
-          table = 1 - table;
           yTot -= 240;
         }
         if (xTot % 8 == 0) {
@@ -350,6 +361,29 @@ class PPU {
         hi <<= 1;
         let [r, g, b] = pal[value];
         this.io.setPixel(xloc + x, yloc + y, r, g, b);
+      }
+    }
+  }
+
+  drawNT(table) {
+    for (let j = 0; j < 30; j++) {
+      for (let i = 0; i < 32; i++) {
+        for (let y = 0; y < 8; y++) {
+          this.populate(table, i * 8, j * 8 + y);
+          for (let x = 0; x < 8; x++) {
+            // hi bit from msb of second plane
+            let value = ((0x80 & this.bgHi) >> 6) | ((0x80 & this.bgLo) >> 7);
+            // shift planes
+            this.bgLo <<= 1;
+            this.bgHi <<= 1;
+            let color = this.bgpal[value];
+            if (color == null) {
+              color = this.pal[this.palette[0]];
+            }
+            let [r, g, b] = color;
+            this.io.setPixel(i * 8 + x, j * 8 + y, r, g, b);
+          }
+        }
       }
     }
   }
