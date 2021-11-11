@@ -155,7 +155,7 @@ class PPU {
       if (this.scanline >= 0 && this.cycle >= 1 && this.cycle <= 256) {
         let right = false;
         if (this.cycle > 8) {
-          right == true;
+          right = true;
         }
         let bg = null;
         let fg = null;
