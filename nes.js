@@ -79,7 +79,6 @@ function handleKey(key) {
         do {
           tick();
         } while (cpu.complete());
-        dump();
         ppu.frame = false;
       }
       break;
@@ -175,8 +174,12 @@ const ppu = new PPU(io);
 const cpu = new Cpu();
 const bus = new Bus(input, ppu, cpu);
 io.registerKeyPressHandler(handleKey);
-bus.loadRom("pacman.nes");
+bus.loadRom("smb.nes");
+//bus.loadRom("pacman.nes");
+//bus.loadRom("Fergulator/test_roms/nesstress.nes");
+//bus.loadRom("Fergulator/test_roms/scanline_scanline.nes");
+//bus.loadRom("Fergulator/test_roms/blargg_ppu/power_up_palette.nes");
+//bus.loadRom("Fergulator/test_roms/sprite_hit_tests_2005.10.05/01.basics.nes");
 // clear log
 fs.writeFileSync(LOG, "");
-// dump();
 run();
