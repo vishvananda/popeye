@@ -186,7 +186,7 @@ io.registerKeyPressHandler(handleKey);
 //bus.loadRom("Fergulator/test_roms/blargg_cpu/rom_singles/09-branches.nes");
 //bus.loadRom("smb.nes");
 //bus.loadRom("pacman.nes");
-bus.loadRom("ice.nes");
+bus.loadRom("rygar.nes");
 //bus.loadRom("Fergulator/test_roms/nesstress.nes");
 //bus.loadRom("Fergulator/test_roms/scanline_scanline.nes");
 //bus.loadRom("Fergulator/test_roms/blargg_ppu/power_up_palette.nes");
