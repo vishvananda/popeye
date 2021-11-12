@@ -11,8 +11,9 @@ class Cart {
       process.exit(1);
     }
     this.mapper = (data[7] & 0xf0) | (data[6] >> 4);
-    // no mappers yet
-    if (this.mapper != 0) {
+    if (this.mapper === 2) {
+      //may need code here
+    } else if (this.mapper != 0) {
       console.log("mapper not supported");
       process.exit(1);
     }
@@ -53,12 +54,22 @@ class Cart {
     if (this.prg.length == 0x4000) {
       address &= 0x3fff;
     }
+    if (this.mapper === 2) {
+      //todo. can read from extra space in rom. Bank15 and Bank6?
+      if (this.prg.length > 0x8000) {
+        //change address to something
+      }
+    }
     return address;
   }
 
   write(address) {
-    console.log("writing not allowed to address", address);
-    process.exit(1);
+    if (this.mapper === 0) {
+      console.log("writing not allowed to address", address);
+      process.exit(1);
+    } else if (this.mapper === 2) {
+      //todo. not sure why mapper1/mapper2 has to write to address
+    }
   }
 
   getTile(bank, num) {
