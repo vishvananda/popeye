@@ -222,6 +222,8 @@ class Nes6502 {
     // reset takes 7 cycles, so we set remaining to 6
     this.remaining = 6;
     this.cycles = 0;
+    this.nmiTrigger = false;
+    this.nmiNext = false;
   }
 
   storeLogVars(addr) {
@@ -232,7 +234,7 @@ class Nes6502 {
       this.last = 0;
     }
     if (this.last === undefined) {
-      console.log("Undefined value at ", addr);
+      console.log("Undefined value at ", hex.toHex16(addr));
     }
   }
 
@@ -296,7 +298,7 @@ class Nes6502 {
     let hi = this.read(0xfffb);
     this.PC = (hi << 8) | lo;
 
-    this.remaining = 8;
+    return 8;
   }
 
   flag(flag, clear) {
@@ -711,41 +713,55 @@ class Nes6502 {
 
   tick(shouldLog) {
     this.cycles++;
-    if (this.remaining == 0) {
-      let ins = this.read(this.PC);
-      let parts = this.lookup[ins];
-      if (parts === undefined) {
-        console.log(
-          "unknown instruction",
-          hex.toHex16(this.PC),
-          ins !== undefined ? hex.toHex8(ins) : "XX"
-        );
-        this.bus.output();
-        process.exit(1);
-      }
-      let [mne, len, fn, ...args] = parts;
-      let ret = "";
-      if (shouldLog) {
-        ret = this.log_ins(mne, len);
-      }
-
-      this.PC++;
-      this.remaining = fn.apply(this, args) - 1;
-
-      if (shouldLog) {
-        // write calculated values
-        ret = ret.replace("%x", hex.toHex8(this.ind));
-        ret = ret.replace("%yyy", hex.toHex16(this.ind));
-        ret = ret.replace("%r", hex.toHex8(this.addr));
-        ret = ret.replace("%abs", hex.toHex16(this.addr));
-        ret = ret.replace("%v", hex.toHex8(this.last));
-      }
-      return ret;
+    if (this.remaining != 0) {
+      this.remaining--;
+      return undefined;
+    }
+    if (this.nmiNext) {
+      // this polling could happen for some instructions
+      // during the remaining cycle but cheat a little
+      // by checking it when we execute the instruction
+      this.nmiNext = false;
+      this.remaining = this.nmi();
+      return undefined;
+    }
+    let ins = this.read(this.PC);
+    let parts = this.lookup[ins];
+    if (parts === undefined) {
+      console.log(
+        "unknown instruction",
+        hex.toHex16(this.PC),
+        ins !== undefined ? hex.toHex8(ins) : "XX"
+      );
+      this.bus.output();
+      process.exit(1);
+    }
+    let [mne, len, fn, ...args] = parts;
+    let ret = "";
+    if (shouldLog) {
+      ret = this.log_ins(mne, len);
     }
 
-    this.remaining--;
+    this.PC++;
+    this.remaining = fn.apply(this, args) - 1;
 
-    return undefined;
+    if (shouldLog) {
+      // write calculated values
+      ret = ret.replace("%x", hex.toHex8(this.ind));
+      ret = ret.replace("%yyy", hex.toHex16(this.ind));
+      ret = ret.replace("%r", hex.toHex8(this.addr));
+      ret = ret.replace("%abs", hex.toHex16(this.addr));
+      ret = ret.replace("%v", hex.toHex8(this.last));
+    }
+    if (this.nmiTrigger) {
+      // this polling could happen for some instructions
+      // during the remaining cycle but cheat a little
+      // by checking it after executing the instruction
+      this.nmiTrigger = false;
+      this.nmiNext = true;
+      return undefined;
+    }
+    return ret;
   }
 
   complete() {

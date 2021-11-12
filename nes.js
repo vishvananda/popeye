@@ -187,13 +187,15 @@ io.registerKeyPressHandler(handleKey);
 //bus.loadRom("smb.nes");
 //bus.loadRom("pacman.nes");
 bus.loadRom("rygar.nes");
+//bus.loadRom("ice.nes");
 //bus.loadRom("Fergulator/test_roms/nesstress.nes");
 //bus.loadRom("Fergulator/test_roms/scanline_scanline.nes");
-//bus.loadRom("Fergulator/test_roms/blargg_ppu/power_up_palette.nes");
-//bus.loadRom("Fergulator/test_roms/sprite_hit_tests_2005.10.05/01.basics.nes");
+//bus.loadRom("Fergulator/test_roms/blargg_ppu/sprite_ram.nes");
+//bus.loadRom("Fergulator/test_roms/sprite_hit_tests_2005.10.05/08.double_height.nes");
 //bus.loadRom("Fergulator/test_roms/blargg_cpu/rom_singles/10-stack.nes");
 //bus.loadRom("Fergulator/test_roms/cpu_timing_test6/cpu_timing_test.nes");
 //bus.loadRom("Fergulator/test_roms/branch_timing_tests/1.Branch_Basics.nes");
+//bus.loadRom("Fergulator/test_roms/ppu_vbl_nmi/rom_singles/05-nmi_timing.nes");
 // clear log
 fs.writeFileSync(LOG, "");
 run();

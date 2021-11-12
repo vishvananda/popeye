@@ -7,7 +7,6 @@ class Bus {
     this.cpu = cpu;
     this.cpu.setBus(this);
     this.ppu = ppu;
-    this.ram = new Uint8Array(0x0800);
   }
 
   loadRom(file) {
@@ -25,7 +24,8 @@ class Bus {
     this.dmaaddr = 0;
     this.dmapage = 0;
     this.dmadata = 0;
-    this.ram = new Uint8Array(0x2000);
+    this.ram = new Uint8Array(0x0800);
+    this.dram = new Uint8Array(0x2000);
   }
 
   read(address) {
@@ -36,7 +36,7 @@ class Bus {
     } else if (address >= 0x4016 && address <= 0x4017) {
       return this.input.read(address);
     } else if (address >= 0x6000 && address <= 0x7fff) {
-      return this.ram[address & 0x1fff];
+      return this.dram[address & 0x1fff];
     } else if (address >= 0x8000 && address <= 0xffff) {
       return this.cart.read(address);
     } else {
@@ -46,7 +46,7 @@ class Bus {
 
   write(address, data) {
     if (address >= 0x0000 && address <= 0x1fff) {
-      this.ram[address & 0x7ff] = data;
+      this.ram[address & 0x07ff] = data;
     } else if (address >= 0x2000 && address <= 0x3fff) {
       return this.ppu.write(address, data);
     } else if (address == 0x4014) {
@@ -56,15 +56,15 @@ class Bus {
     } else if (address >= 0x4016 && address <= 0x4017) {
       this.input.write(address, data);
     } else if (address >= 0x6000 && address <= 0x7fff) {
-      this.ram[address & 0x1fff] = data;
+      this.dram[address & 0x1fff] = data;
     } else if (address >= 0x8000 && address <= 0xffff) {
       return this.cart.write(address, data);
     }
   }
   output() {
     console.log("OUTPUT", hex.toHex8(this.ram[0x0000]));
-    let nul = this.ram.indexOf(0, 4);
-    console.log("TEXT", String.fromCharCode(...this.ram.slice(4, nul)));
+    let nul = this.dram.indexOf(0, 4);
+    console.log("TEXT", String.fromCharCode(...this.dram.slice(4, nul)));
   }
 
   tick(logCallback = null) {
@@ -100,10 +100,9 @@ class Bus {
         }
       }
     }
-
     if (this.ppu.nmi) {
       this.ppu.nmi = false;
-      this.cpu.nmi();
+      this.cpu.nmiTrigger = true;
     }
   }
 }

@@ -141,7 +141,7 @@ class PPU {
 
   tick() {
     if (this.scanline >= -1 && this.scanline < 240) {
-      let rendering = this.mask & (Mask.BACKGROUND | Mask.SPRITE);
+      let rendering = this.mask & Mask.BACKGROUND;
       if (this.scanline == 0 && this.cycle == 0 && this.odd && rendering) {
         // skip cycle on odd frames
         this.cycle = 1;
@@ -491,7 +491,7 @@ class PPU {
   }
 
   read(address) {
-    switch (address) {
+    switch (address & 0x2007) {
       case 0x2002:
         // Status
         return this.readStatus();
@@ -509,8 +509,15 @@ class PPU {
   }
   write(address, data) {
     this.status = (this.status & 0xe0) | (data & 0x1f);
-    switch (address) {
+    switch (address & 0x2007) {
       case 0x2000:
+        if (
+          data & CR.GENERATE_NMI &&
+          !(this.control & CR.GENERATE_NMI) &&
+          this.status & St.VERTICAL_BLANK
+        ) {
+          this.nmi = true;
+        }
         this.control = data;
         // write bits 10/11 of taddr from control nametable
         this.taddr &= 0xf3ff;
