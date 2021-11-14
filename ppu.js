@@ -439,8 +439,8 @@ class PPU {
       this.buffer = this.readVram(addr);
       return result;
     } else if (addr >= 0x3f00 && addr <= 0x3fff) {
-      // TODO: sets internal buffer from weird address
-      this.buffer = this.readVram(addr & 0x3eff);
+      // TODO: sets internal buffer from the address
+      this.buffer = this.readVram(addr);
       // $3F10/$3F14/$3F18/$3F1C are mirrors of $3F00/$3F04/$3F08/$3F0C
       if ((addr & 0xf3) == 0x10) {
         addr -= 0x10;
