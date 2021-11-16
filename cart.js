@@ -2,7 +2,7 @@ const fs = require("fs");
 const HEADER = Buffer.from([0x4e, 0x45, 0x53, 0x1a]);
 const PRG_PAGE_SIZE = 16 * 1024;
 const CHR_PAGE_SIZE = 8 * 1024;
-
+let bankTwo = "";
 class Cart {
   constructor(file) {
     let data = fs.readFileSync(file);
@@ -29,7 +29,7 @@ class Cart {
 
     let prg_size = data[4] * PRG_PAGE_SIZE;
     let chr_size = data[5] * CHR_PAGE_SIZE;
-
+    this.nBanks = data[4];
     let prg_start = 16;
     if ((data[6] & 0x06) != 0) {
       // skip trainer
@@ -37,6 +37,8 @@ class Cart {
     }
     let chr_start = prg_start + prg_size;
     this.prg = data.slice(prg_start, prg_start + prg_size);
+    // console.log(this.prg);
+    // process.exit(1);
     if (chr_size == 0) {
       // chr ram
       console.log("using chr ram");
@@ -49,15 +51,33 @@ class Cart {
   read(address) {
     return this.prg[this.prgOffset(address)];
   }
+
+  mapperTwoReset() {
+    this.nPRGlo = 0;
+    this.nPRGhi = this.nBanks - 1;
+    this.reset = true;
+  }
   prgOffset(address) {
-    address -= 0x8000;
-    if (this.prg.length == 0x4000) {
-      address &= 0x3fff;
-    }
-    if (this.mapper === 2) {
-      //todo. can read from extra space in rom. Bank15 and Bank6?
-      if (this.prg.length > 0x8000) {
-        //change address to something
+    if (this.mapper === 0) {
+      address -= 0x8000;
+      if (this.prg.length == 0x4000) {
+        address &= 0x3fff;
+      }
+    } else if (this.mapper === 2) {
+      if (!this.reset) {
+        this.mapperTwoReset();
+        console.log(this.nBanks, this.nPRGlo, this.nPRGhi);
+        // process.exit(1);
+      }
+      if (address < 0x8000) {
+        address -= 0x8000;
+        if (this.prg.length == 0x4000) {
+          address &= 0x3fff;
+        }
+      } else if (address >= 0x8000 && address <= 0xbfff) {
+        address = this.nPRGlo * 0x4000 + (address & 0x3fff);
+      } else if (address >= 0xc000 && address <= 0x3fff) {
+        address = this.nPRGhi * 0x4000 + (address & 0x3fff);
       }
     }
     return address;
@@ -68,13 +88,27 @@ class Cart {
       console.log("writing not allowed to address", address);
       process.exit(1);
     } else if (this.mapper === 2) {
-      //todo. not sure why mapper1/mapper2 has to write to address
+      //need to cpu.write to first 16kb. last 16kb always uses last bank in ROM for mapper 2.
+      if (address < 0x8000) {
+        address -= 0x8000;
+        if (this.prg.length == 0x4000) {
+          address &= 0x3fff;
+        }
+      } else if (address >= 0x8000 && address <= 0xffff) {
+        //set prgLo to whatever current program bank is (first 4 bits), and cpu will read it later
+        this.nPRGlo = this.data & 0x0f; // olc uses data variable but that didn't work here
+      }
     }
   }
 
   getTile(bank, num) {
-    let start = bank * 0x1000 + num * 16;
-    return this.chr.slice(start, start + 16);
+    if (this.mapper === 2) {
+      let start = bankTwo * 0x1000 + num * 16;
+      return this.chr.slice(start, start + 16);
+    } else {
+      let start = bank * 0x1000 + num * 16;
+      return this.chr.slice(start, start + 16);
+    }
   }
 }
 
