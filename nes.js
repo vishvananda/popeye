@@ -184,7 +184,7 @@ const cpu = new Cpu();
 const bus = new Bus(input, ppu, cpu);
 io.registerKeyPressHandler(handleKey);
 //bus.loadRom("Fergulator/test_roms/blargg_cpu/rom_singles/09-branches.nes");
-//bus.loadRom("smb.nes");
+// bus.loadRom("smb.nes");
 //bus.loadRom("pacman.nes");
 bus.loadRom("rygar.nes");
 //bus.loadRom("ice.nes");
