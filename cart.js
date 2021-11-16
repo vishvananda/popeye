@@ -76,14 +76,14 @@ class Cart {
         }
       } else if (address >= 0x8000 && address <= 0xbfff) {
         address = this.nPRGlo * 0x4000 + (address & 0x3fff);
-      } else if (address >= 0xc000 && address <= 0x3fff) {
+      } else if (address >= 0xc000 && address <= 0xffff) {
         address = this.nPRGhi * 0x4000 + (address & 0x3fff);
       }
     }
     return address;
   }
 
-  write(address) {
+  write(address, data) {
     if (this.mapper === 0) {
       console.log("writing not allowed to address", address);
       process.exit(1);
@@ -96,19 +96,14 @@ class Cart {
         }
       } else if (address >= 0x8000 && address <= 0xffff) {
         //set prgLo to whatever current program bank is (first 4 bits), and cpu will read it later
-        this.nPRGlo = this.data & 0x0f; // olc uses data variable but that didn't work here
+        this.nPRGlo = data & 0x0f; // olc uses data variable but that didn't work here
       }
     }
   }
 
   getTile(bank, num) {
-    if (this.mapper === 2) {
-      let start = bankTwo * 0x1000 + num * 16;
-      return this.chr.slice(start, start + 16);
-    } else {
-      let start = bank * 0x1000 + num * 16;
-      return this.chr.slice(start, start + 16);
-    }
+    let start = bank * 0x1000 + num * 16;
+    return this.chr.slice(start, start + 16);
   }
 }
 
