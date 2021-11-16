@@ -523,7 +523,7 @@ class Nes6502 {
   decStack() {
     this.Stack--;
     if (this.Stack < 0) {
-      console.log("stack overflow");
+      // console.log("stack overflow");
       this.Stack &= 0xff;
     }
   }
@@ -531,7 +531,7 @@ class Nes6502 {
   incStack() {
     this.Stack++;
     if (this.Stack > 0xff) {
-      console.log("stack underflow");
+      // console.log("stack underflow");
       this.Stack &= 0xff;
     }
   }

@@ -2,7 +2,6 @@ const fs = require("fs");
 const HEADER = Buffer.from([0x4e, 0x45, 0x53, 0x1a]);
 const PRG_PAGE_SIZE = 16 * 1024;
 const CHR_PAGE_SIZE = 8 * 1024;
-let bankTwo = "";
 class Cart {
   constructor(file) {
     let data = fs.readFileSync(file);
@@ -25,13 +24,17 @@ class Cart {
     this.nBanks = data[4];
     this.mapper = (data[7] & 0xf0) | (data[6] >> 4);
     if (this.mapper === 2) {
-      console.log("mapper 2 with", this.nBanks, prg_size);
       this.nPRGlo = 0;
       this.nPRGhi = this.nBanks - 1;
     } else if (this.mapper != 0) {
       console.log("mapper not supported");
       process.exit(1);
     }
+
+    // only some mappers support ram, but many debug roms
+    // use it with the wrong mapper so always use it
+    this.ram = new Uint8Array(0x2000);
+
     let prg_start = 16;
     if ((data[6] & 0x06) != 0) {
       // skip trainer
@@ -49,6 +52,9 @@ class Cart {
   }
 
   read(address) {
+    if (address >= 0x6000 && address <= 0x7fff) {
+      return this.ram[address & 0x1fff];
+    }
     return this.prg[this.prgOffset(address)];
   }
 
@@ -72,6 +78,10 @@ class Cart {
   }
 
   write(address, data) {
+    if (address >= 0x6000 && address <= 0x7fff) {
+      this.ram[address & 0x1fff] = data;
+      return;
+    }
     if (this.mapper === 0) {
       console.log("writing not allowed to address", address);
       process.exit(1);

@@ -25,7 +25,6 @@ class Bus {
     this.dmapage = 0;
     this.dmadata = 0;
     this.ram = new Uint8Array(0x0800);
-    this.dram = new Uint8Array(0x2000);
   }
 
   read(address) {
@@ -35,9 +34,7 @@ class Bus {
       return this.ppu.read(address);
     } else if (address >= 0x4016 && address <= 0x4017) {
       return this.input.read(address);
-    } else if (address >= 0x6000 && address <= 0x7fff) {
-      return this.dram[address & 0x1fff];
-    } else if (address >= 0x8000 && address <= 0xffff) {
+    } else if (address >= 0x6000 && address <= 0xffff) {
       return this.cart.read(address);
     } else {
       return 0x00;
@@ -55,16 +52,14 @@ class Bus {
       this.dmapage = data;
     } else if (address >= 0x4016 && address <= 0x4017) {
       this.input.write(address, data);
-    } else if (address >= 0x6000 && address <= 0x7fff) {
-      this.dram[address & 0x1fff] = data;
-    } else if (address >= 0x8000 && address <= 0xffff) {
+    } else if (address >= 0x6000 && address <= 0xffff) {
       return this.cart.write(address, data);
     }
   }
   output() {
-    console.log("OUTPUT", hex.toHex8(this.ram[0x0000]));
-    let nul = this.dram.indexOf(0, 4);
-    console.log("TEXT", String.fromCharCode(...this.dram.slice(4, nul)));
+    console.log("OUTPUT", hex.toHex8(this.cart.ram[0x0000]));
+    let nul = this.cart.ram.indexOf(0, 4);
+    console.log("TEXT", String.fromCharCode(...this.cart.ram.slice(4, nul)));
   }
 
   tick(logCallback = null) {
