@@ -6,6 +6,7 @@ const Bus = require("./bus");
 const Input = require("./input");
 const fs = require("fs");
 const hex = require("./hex");
+const settings = require("./settings");
 
 var running = false;
 var debug = false;
@@ -39,12 +40,13 @@ function tick() {
   }
 }
 
+let previous = process.hrtime();
+let ticks = 0;
 // run at 60 fps
 let last = null;
 let residual = 0;
 function run() {
   if (io.shouldClose || io.getKey(glfw.KEY_ESCAPE)) {
-    io.shutdown();
     process.exit(0);
   }
   if (running) {
@@ -63,6 +65,13 @@ function run() {
       } while (!ppu.frame);
       ppu.frame = false;
     }
+  }
+  ticks++;
+  let since = process.hrtime(previous);
+  if (since[0] >= 1) {
+    previous = process.hrtime();
+    console.log(ticks);
+    ticks = 0;
   }
   io.tick(run, graphics);
 }
@@ -109,6 +118,9 @@ function handleKey(key) {
       break;
     case "a":
       io.audio(sample);
+      break;
+    case "e":
+      io.eaudio(sample);
       break;
     case "d":
       // enable or disable debug
@@ -202,12 +214,11 @@ function dump() {
   console.log(hex.hexdump(buf2, offset, length));
 }
 
-const rate = 44100;
-const io = new IO(w, h, rate);
+const io = new IO(w, h);
 const input = new Input(io);
 const ppu = new PPU(io);
 const cpu = new Cpu();
-const bus = new Bus(input, ppu, cpu, rate);
+const bus = new Bus(input, ppu, cpu, settings.rate);
 io.registerKeyPressHandler(handleKey);
 //bus.loadRom("Fergulator/test_roms/blargg_cpu/rom_singles/09-branches.nes");
 bus.loadRom("smb.nes");
@@ -225,4 +236,6 @@ bus.loadRom("smb.nes");
 
 // clear log
 // fs.writeFileSync(LOG, "");
+
+process.on("exit", () => io.shutdown());
 run();

@@ -12,7 +12,6 @@ class Bus {
     this.time = 0;
     this.sampletime = 1.0 / rate;
     this.clocktime = 1.0 / 5369318.0;
-    this.elapsed = 0;
   }
 
   loadRom(file) {

@@ -3,6 +3,10 @@
 const Readable = require("stream").Readable;
 const bufferAlloc = require("buffer-alloc");
 const Speaker = require("speaker");
+const settings = require("./settings");
+const { spawn, fork } = require("child_process");
+var stream = require("stream");
+var fs = require("fs");
 
 const webgl = require("webgl-raub");
 
@@ -60,7 +64,7 @@ function getShader(gl, id) {
 }
 
 class IO {
-  constructor(width, height, rate, scaling = 4) {
+  constructor(width, height, scaling = 4) {
     Document.setWebgl(webgl);
     this.doc = new Document();
 
@@ -90,9 +94,6 @@ class IO {
       this.keydown(e);
     });
     this.keyPressHandlers = [];
-
-    // TODO: configure speaker output
-    this.rate = rate;
   }
 
   registerKeyPressHandler(handler) {
@@ -226,6 +227,10 @@ class IO {
   }
 
   shutdown() {
+    console.log("exiting gracefully");
+    if (this.controller !== undefined) {
+      this.controller.abort();
+    }
     this.doc.destroy();
     glfw.terminate();
   }
@@ -247,15 +252,59 @@ class IO {
       }
       this.push(buf);
     }
-    const reader = new Readable();
-    reader.bitDepth = 16;
-    reader.channels = 1;
-    reader.sampleRate = 44100;
+    const reader = new Readable({ highWaterMark: 768 });
+    reader.bitDepth = settings.bitDepth;
+    reader.channels = settings.channels;
+    reader.sampleRate = settings.rate;
     reader.samplesGenerated = 0;
     reader._read = read;
 
-    // create a SineWaveGenerator instance and pipe it to the speaker
-    reader.pipe(new Speaker());
+    reader.pipe(
+      new Speaker({
+        channels: reader.channels,
+        bitDepth: reader.bitDepth,
+        sampleRate: reader.sampleRate,
+      })
+    );
+  }
+
+  eaudio(sample) {
+    // create fifo
+    let fifo = spawn("mkfifo", ["testfifo"]);
+    this.sample = sample;
+    console.log(this.sample);
+    // this occurs after fifo is created
+    fifo.on("exit", () => {
+      this.controller = new AbortController();
+      const { signal } = this.controller;
+      this.audioProc = fork(require.resolve("./sound"), null, { signal });
+      const fd = fs.openSync("./testfifo", "w+");
+      var fifoWs = new stream.Writable({ highWaterMark: 0 });
+
+      fifoWs._write = function (chunk, encoding, done) {
+        fs.write(fd, chunk, done);
+      };
+      let n = 768;
+      const sampleSize = settings.bitDepth / 8;
+      const blockAlign = sampleSize * settings.channels;
+      const numSamples = (n / blockAlign) | 0;
+      const buf = bufferAlloc(numSamples * blockAlign);
+
+      function looper() {
+        for (let i = 0; i < numSamples; i++) {
+          for (let channel = 0; channel < settings.channels; channel++) {
+            let val = sample();
+            const offset =
+              i * sampleSize * settings.channels + channel * sampleSize;
+            buf[`writeInt${settings.bitDepth}LE`](val, offset);
+          }
+        }
+        fifoWs.write(buf, () => {
+          looper();
+        });
+      }
+      looper();
+    });
   }
 
   tick(callback, graphics) {
