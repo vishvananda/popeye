@@ -1,12 +1,18 @@
 const Cart = require("./cart");
 const hex = require("./hex");
+const APU = require("./apu");
 
 class Bus {
-  constructor(input, ppu, cpu) {
+  constructor(input, ppu, cpu, rate) {
     this.input = input;
     this.cpu = cpu;
     this.cpu.setBus(this);
     this.ppu = ppu;
+    this.apu = new APU(rate);
+    this.time = 0;
+    this.sampletime = 1.0 / rate;
+    this.clocktime = 1.0 / 5369318.0;
+    this.elapsed = 0;
   }
 
   loadRom(file) {
@@ -95,10 +101,20 @@ class Bus {
         }
       }
     }
+
     if (this.ppu.nmi) {
       this.ppu.nmi = false;
       this.cpu.nmiTrigger = true;
     }
+
+    // audio sync
+    this.time += this.clocktime;
+    if (this.time >= this.sampletime) {
+      this.time -= this.sampletime;
+      return this.apu.sample();
+    }
+
+    return null;
   }
 }
 

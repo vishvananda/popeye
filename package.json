@@ -4,6 +4,7 @@
   "dependencies": {
     "3d-core-raub": "^3.6.0",
     "glfw-raub": "^4.6.0",
+    "speaker": "^0.5.3",
     "webgl-raub": "^2.2.4"
   },
   "devDependencies": {

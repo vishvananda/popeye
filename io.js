@@ -1,5 +1,9 @@
 "use strict";
 
+const Readable = require("stream").Readable;
+const bufferAlloc = require("buffer-alloc");
+const Speaker = require("speaker");
+
 const webgl = require("webgl-raub");
 
 const glfw = require("glfw-raub");
@@ -56,7 +60,7 @@ function getShader(gl, id) {
 }
 
 class IO {
-  constructor(width, height, scaling = 4) {
+  constructor(width, height, rate, scaling = 4) {
     Document.setWebgl(webgl);
     this.doc = new Document();
 
@@ -86,6 +90,9 @@ class IO {
       this.keydown(e);
     });
     this.keyPressHandlers = [];
+
+    // TODO: configure speaker output
+    this.rate = rate;
   }
 
   registerKeyPressHandler(handler) {
@@ -223,6 +230,34 @@ class IO {
     glfw.terminate();
   }
 
+  audio(sample) {
+    // the Readable "_read()" callback function
+    function read(n) {
+      const sampleSize = this.bitDepth / 8;
+      const blockAlign = sampleSize * this.channels;
+      const numSamples = (n / blockAlign) | 0;
+      const buf = bufferAlloc(numSamples * blockAlign);
+
+      for (let i = 0; i < numSamples; i++) {
+        for (let channel = 0; channel < this.channels; channel++) {
+          let val = sample();
+          const offset = i * sampleSize * this.channels + channel * sampleSize;
+          buf[`writeInt${this.bitDepth}LE`](val, offset);
+        }
+      }
+      this.push(buf);
+    }
+    const reader = new Readable();
+    reader.bitDepth = 16;
+    reader.channels = 1;
+    reader.sampleRate = 44100;
+    reader.samplesGenerated = 0;
+    reader._read = read;
+
+    // create a SineWaveGenerator instance and pipe it to the speaker
+    reader.pipe(new Speaker());
+  }
+
   tick(callback, graphics) {
     if (graphics) {
       this.gl.viewport(0, 0, this.gl.viewportWidth, this.gl.viewportHeight);
@@ -259,6 +294,7 @@ class IO {
 
       this.gl.bindTexture(this.gl.TEXTURE_2D, null);
     }
+    this.frameTime = process.hrtime();
     this.frame(callback);
   }
 }

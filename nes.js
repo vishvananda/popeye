@@ -33,24 +33,46 @@ function logCallback(log) {
 
 function tick() {
   if (debug) {
-    bus.tick(logCallback);
+    return bus.tick(logCallback);
   } else {
-    bus.tick();
+    return bus.tick();
   }
 }
 
+// run at 60 fps
+let last = null;
+let residual = 0;
 function run() {
   if (io.shouldClose || io.getKey(glfw.KEY_ESCAPE)) {
     io.shutdown();
     process.exit(0);
   }
   if (running) {
-    do {
-      tick();
-    } while (!ppu.frame);
-    ppu.frame = false;
+    let micro = 0;
+    if (last != null) {
+      let elapsed = process.hrtime(last);
+      micro = elapsed[0] * 1000000 + elapsed[1] / 1000;
+    }
+    residual -= micro;
+    last = process.hrtime();
+    if (residual <= 0) {
+      // tick approx every 1/60 of a second
+      residual += 1000000 / 60.0988139;
+      do {
+        tick();
+      } while (!ppu.frame);
+      ppu.frame = false;
+    }
   }
   io.tick(run, graphics);
+}
+
+function sample() {
+  let sample = null;
+  do {
+    sample = tick();
+  } while (sample == null);
+  return sample;
 }
 
 const w = 256;
@@ -84,6 +106,9 @@ function handleKey(key) {
       break;
     case "g":
       graphics = !graphics;
+      break;
+    case "a":
+      io.audio(sample);
       break;
     case "d":
       // enable or disable debug
@@ -177,16 +202,17 @@ function dump() {
   console.log(hex.hexdump(buf2, offset, length));
 }
 
-const io = new IO(w, h);
+const rate = 44100;
+const io = new IO(w, h, rate);
 const input = new Input(io);
 const ppu = new PPU(io);
 const cpu = new Cpu();
-const bus = new Bus(input, ppu, cpu);
+const bus = new Bus(input, ppu, cpu, rate);
 io.registerKeyPressHandler(handleKey);
 //bus.loadRom("Fergulator/test_roms/blargg_cpu/rom_singles/09-branches.nes");
-// bus.loadRom("smb.nes");
+bus.loadRom("smb.nes");
 //bus.loadRom("pacman.nes");
-bus.loadRom("rygar.nes");
+//bus.loadRom("rygar.nes");
 //bus.loadRom("ice.nes");
 //bus.loadRom("Fergulator/test_roms/nesstress.nes");
 //bus.loadRom("Fergulator/test_roms/scanline_scanline.nes");
@@ -196,6 +222,7 @@ bus.loadRom("rygar.nes");
 //bus.loadRom("Fergulator/test_roms/cpu_timing_test6/cpu_timing_test.nes");
 //bus.loadRom("Fergulator/test_roms/branch_timing_tests/1.Branch_Basics.nes");
 //bus.loadRom("Fergulator/test_roms/ppu_vbl_nmi/rom_singles/05-nmi_timing.nes");
+
 // clear log
-fs.writeFileSync(LOG, "");
+// fs.writeFileSync(LOG, "");
 run();
