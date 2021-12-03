@@ -293,17 +293,18 @@ class PPU {
       } else if (this.cycle == 257) {
         this.nSprites = 0;
         this.zeroHit = false;
-        for (let i = 0; i < 256; i += 4) {
-          let spriteY = this.oam[i];
-          let size = this.control & CR.SPRITE_SIZE ? 16 : 8;
-          if (this.scanline >= spriteY && this.scanline < spriteY + size) {
-            if (i == 0) {
-              this.zeroHit = true;
-            }
-            if (this.nSprites == 8) {
-              this.status |= St.OVERFLOW;
-              break;
-            }
+      } else if (this.cycle >= 258 && this.cycle < 258 + 64) {
+        // check one sprite per cycle
+        let i = (this.cycle - 258) * 4;
+        let spriteY = this.oam[i];
+        let size = this.control & CR.SPRITE_SIZE ? 16 : 8;
+        if (this.scanline >= spriteY && this.scanline < spriteY + size) {
+          if (i == 0) {
+            this.zeroHit = true;
+          }
+          if (this.nSprites > 8) {
+            this.status |= St.OVERFLOW;
+          } else {
             let j = this.nSprites * 4;
             this.sprites[j] = this.oam[i];
             this.sprites[j + 1] = this.oam[i + 1];
