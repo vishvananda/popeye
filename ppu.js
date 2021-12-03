@@ -82,12 +82,13 @@ class PPU {
     this.scanline = 0;
     this.bgLo = 0;
     this.bgHi = 0;
-    this.bgpal = null;
     this.nmi = false;
     this.sprites = new Uint8Array(32);
     this.odd = false;
     this.finey = 0;
     this.zeroHit = false;
+    this.bgpal = new Array(4);
+    this.fgpal = new Array(4);
   }
 
   populate(table, x, y) {
@@ -125,12 +126,10 @@ class PPU {
 
     // use bottom two bytes to find palette index
     let start = 0x01 + (attr & 0x03) * 4;
-    this.bgpal = [
-      null,
-      this.pal[this.palette[start]],
-      this.pal[this.palette[start + 1]],
-      this.pal[this.palette[start + 2]],
-    ];
+    this.bgpal[0] = null;
+    this.bgpal[1] = this.pal[this.palette[start]];
+    this.bgpal[2] = this.pal[this.palette[start + 1]];
+    this.bgpal[3] = this.pal[this.palette[start + 2]];
   }
   values(table, x, y) {
     let row = Math.floor(y / 8);
@@ -262,14 +261,12 @@ class PPU {
               let hi = this.cart.ppuRead(tileoff + finey + 8) << finex;
               // foreground palettes are the last 4
               let start = 0x11 + (this.sprites[i + 2] & 0x03) * 4;
-              let fgpal = [
-                null,
-                this.pal[this.palette[start]],
-                this.pal[this.palette[start + 1]],
-                this.pal[this.palette[start + 2]],
-              ];
+              this.fgpal[0] = null;
+              this.fgpal[1] = this.pal[this.palette[start]];
+              this.fgpal[2] = this.pal[this.palette[start + 1]];
+              this.fgpal[3] = this.pal[this.palette[start + 2]];
               let value = ((0x80 & hi) >> 6) | ((0x80 & lo) >> 7);
-              fg = fgpal[value];
+              fg = this.fgpal[value];
               if (fg != null) {
                 if (this.zeroHit && n == 0 && bg != null && x != 255) {
                   this.status |= St.SPRITE_ZERO;
@@ -292,8 +289,7 @@ class PPU {
           color = bg;
         }
 
-        let [r, g, b] = color;
-        this.io.setPixel(x, y, r, g, b);
+        this.io.setPixel(x, y, color[0], color[1], color[2]);
       } else if (this.cycle == 257) {
         this.nSprites = 0;
         this.zeroHit = false;
@@ -363,12 +359,10 @@ class PPU {
     if (palette === undefined) {
       palette = [0, 1, 2, 3];
     }
-    let pal = [
-      this.pal[palette[0]],
-      this.pal[palette[1]],
-      this.pal[palette[2]],
-      this.pal[palette[3]],
-    ];
+    this.bgpal[0] = this.pal[palette[0]];
+    this.bgpal[1] = this.pal[palette[1]];
+    this.bgpal[2] = this.pal[palette[2]];
+    this.bgpal[3] = this.pal[palette[3]];
     let tileoff = this.getTileOffset(bank, num);
     for (let y = 0; y < 8; y++) {
       let lo = this.cart.ppuRead(tileoff + y);
@@ -379,8 +373,8 @@ class PPU {
         // shift planes
         lo <<= 1;
         hi <<= 1;
-        let [r, g, b] = pal[value];
-        this.io.setPixel(xloc + x, yloc + y, r, g, b);
+        let color = this.bgpal[value];
+        this.io.setPixel(xloc + x, yloc + y, color[0], color[1], color[2]);
       }
     }
   }
@@ -400,8 +394,7 @@ class PPU {
             if (color == null) {
               color = this.pal[this.palette[0]];
             }
-            let [r, g, b] = color;
-            this.io.setPixel(i * 8 + x, j * 8 + y, r, g, b);
+            this.io.setPixel(i * 8 + x, j * 8 + y, color[0], color[1], color[2]);
           }
         }
       }
