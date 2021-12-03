@@ -51,6 +51,9 @@ class Bus {
       this.ram[address & 0x07ff] = data;
     } else if (address >= 0x2000 && address <= 0x3fff) {
       return this.ppu.write(address, data);
+    } else if ((address >= 0x4000 && address <= 0x4013) || address == 0x4015 || address == 0x4017)
+    {
+      this.apu.write(address, data);
     } else if (address == 0x4014) {
       this.dma = true;
       this.dmaaddr = 0;
@@ -70,6 +73,7 @@ class Bus {
   tick(logCallback = null) {
     this.cycles++;
     this.ppu.tick();
+    this.apu.tick();
     if (this.cycles % 3 == 0) {
       if (this.dma) {
         if (this.dummy) {
