@@ -40,11 +40,15 @@ function tick() {
   }
 }
 
-let previous = process.hrtime();
 let ticks = 0;
 // run at 60 fps
-let last = null;
 let residual = 0;
+
+let last = null;
+let start = null;
+let previous = process.hrtime();
+
+
 function run() {
   if (io.shouldClose || io.getKey(glfw.KEY_ESCAPE)) {
     process.exit(0);
@@ -64,14 +68,23 @@ function run() {
         tick();
       } while (!ppu.frame);
       ppu.frame = false;
+      ticks++;
     }
   }
-  ticks++;
-  let since = process.hrtime(previous);
-  if (since[0] >= 1) {
-    previous = process.hrtime();
-    console.log(ticks);
-    ticks = 0;
+  let now = process.hrtime();
+  if (ticks && now[0] - previous[0] >= 1) {
+    if (start != null) {
+      // ignore the first few seconds
+      let seconds = now[0] - start[0] - 4;
+      if (seconds <= 0) {
+        ticks = 0;
+      } else {
+        console.log(ticks / seconds);
+      }
+    } else {
+      start = now;
+    }
+    previous = now;
   }
   io.tick(run, graphics);
 }
@@ -80,6 +93,10 @@ function sample() {
   let sample = null;
   do {
     sample = tick();
+    if(ppu.frame) {
+      ppu.frame = false;
+      ticks++;
+    }
   } while (sample == null);
   return sample;
 }
@@ -222,6 +239,7 @@ const bus = new Bus(input, ppu, cpu, settings.rate);
 io.registerKeyPressHandler(handleKey);
 //bus.loadRom("Fergulator/test_roms/blargg_cpu/rom_singles/09-branches.nes");
 bus.loadRom("smb.nes");
+//bus.loadRom("zelda.nes");
 //bus.loadRom("pacman.nes");
 //bus.loadRom("rygar.nes");
 //bus.loadRom("ice.nes");
