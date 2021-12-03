@@ -229,15 +229,31 @@ class PPU {
             let i = n * 4;
             let spriteX = this.sprites[i + 3];
             let attr = this.sprites[i + 2];
+            let size = this.control & CR.SPRITE_SIZE ? 16 : 8;
             if (x >= spriteX && x < spriteX + 8) {
               // sprites are delayed by one scanline
               let finey = this.scanline - 1 - this.sprites[i];
-              // TODO: 16 bit sprites
-              if (attr & SpriteByteTwo.FLIP_VERTICAL) {
+              let flipped =
+                (attr & SpriteByteTwo.FLIP_VERTICAL) ==
+                SpriteByteTwo.FLIP_VERTICAL;
+              let tile = null;
+              if (size === 8) {
+                let bank = (this.control & CR.SPRITE_PATTERN_ADDR) >> 3;
+                tile = this.cart.getTile(bank, this.sprites[i + 1]);
+              } else {
+                let bank = this.sprites[i + 1] & SpriteByteOne.BANK;
+                let tilenum = this.sprites[i + 1] & ~SpriteByteOne.BANK;
+                if (finey > 7 != flipped) {
+                  tilenum += 1;
+                }
+                if (finey > 7) {
+                  finey -= 8;
+                }
+                tile = this.cart.getTile(bank, tilenum);
+              }
+              if (flipped) {
                 finey = 7 - finey;
               }
-              let bank = (this.control & CR.SPRITE_PATTERN_ADDR) >> 3;
-              let tile = this.cart.getTile(bank, this.sprites[i + 1]);
               let finex = x - spriteX;
               if (attr & SpriteByteTwo.FLIP_HORIZONTAL) {
                 finex = 7 - finex;
