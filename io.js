@@ -158,9 +158,9 @@ class IO {
 
   initBuffers() {
     const vertices = [
-      // First trianthis.gle:
+      // First triangle:
       1.0, 1.0, -1.0, 1.0, -1.0, -1.0,
-      // Second trianthis.gle:
+      // Second triangle:
       -1.0, -1.0, 1.0, -1.0, 1.0, 1.0,
     ];
     this.screenQuadVBO = this.gl.createBuffer();
@@ -272,7 +272,6 @@ class IO {
     // create fifo
     let fifo = spawn("mkfifo", ["testfifo"]);
     this.sample = sample;
-    console.log(this.sample);
     // this occurs after fifo is created
     fifo.on("exit", () => {
       this.controller = new AbortController();
@@ -324,7 +323,18 @@ class IO {
       );
 
       this.gl.bindTexture(this.gl.TEXTURE_2D, this.texture);
-      this.gl.pixelStorei(this.gl.UNPACK_ALIGNMENT, 1);
+      // alternative to below (seems to be about the same speed)
+      // this.gl.texImage2D(
+      //   this.gl.TEXTURE_2D,
+      //   0,
+      //   this.gl.RGB,
+      //   this.width,
+      //   this.height,
+      //   0,
+      //   this.gl.RGB,
+      //   this.gl.UNSIGNED_BYTE,
+      //   this.data
+      // );
       this.gl.texSubImage2D(
         this.gl.TEXTURE_2D,
         0,
