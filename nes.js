@@ -47,7 +47,10 @@ let residual = 0;
 let last = null;
 let start = null;
 let previous = process.hrtime();
-
+let fpsWindow = 20;
+let lastN = new Array(fpsWindow).fill(0);
+let cur = 0;
+let totalN = 0;
 
 function run() {
   if (io.shouldClose || io.getKey(glfw.KEY_ESCAPE)) {
@@ -74,13 +77,17 @@ function run() {
   let now = process.hrtime();
   if (ticks && now[0] - previous[0] >= 1) {
     if (start != null) {
-      // ignore the first few seconds
-      let seconds = now[0] - start[0] - 4;
-      if (seconds <= 0) {
-        ticks = 0;
-      } else {
-        console.log(ticks / seconds);
+      // ignore the first second
+      let seconds = now[0] - start[0] - 1;
+      if (seconds > 0) {
+        totalN += ticks;
+        if (++cur >= fpsWindow) cur = 0;
+        totalN -= lastN[cur];
+        lastN[cur] = ticks;
+        if (seconds > fpsWindow) seconds = fpsWindow;
+        console.log(totalN / seconds);
       }
+      ticks = 0;
     } else {
       start = now;
     }
