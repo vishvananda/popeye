@@ -24,8 +24,23 @@ class Cart {
     this.nBanks = data[4];
     this.mapper = (data[7] & 0xf0) | (data[6] >> 4);
     if (this.mapper === 2) {
+      // PRG ROM capacity	256K/4096K
+      // PRG ROM window	16K + 16K fixed
+      // PRG RAM capacity	None
+      // CHR capacity	8K
+      // CHR window	n/a
+      // Nametable mirroring	Fixed H or V, controlled by solder pads
       this.nPRGlo = 0;
       this.nPRGhi = this.nBanks - 1;
+    } else if (this.mapper === 1) {
+      // PRG ROM capacity	256K (512K)
+      // PRG ROM window	16K + 16K fixed or 32K
+      // PRG RAM capacity	32K
+      // PRG RAM window	8K
+      // CHR capacity	128K
+      // CHR window	4K + 4K or 8K
+      // Nametable mirroring	H, V, or 1, switchable
+      //TODO
     } else if (this.mapper != 0) {
       console.log("mapper not supported");
       process.exit(1);
@@ -73,6 +88,8 @@ class Cart {
       } else if (address >= 0xc000 && address <= 0xffff) {
         address = this.nPRGhi * 0x4000 + (address & 0x3fff);
       }
+    } else if (this.mapper === 1) {
+      //TODO
     }
     return address;
   }
@@ -88,12 +105,18 @@ class Cart {
     } else if (this.mapper === 2) {
       //set prgLo to whatever current program bank is (first 4 bits), and cpu will read it later
       this.nPRGlo = data & 0x0f;
+    } else if (this.mapper === 1) {
+      //TODO
     }
   }
 
-  getTile(bank, num) {
-    let start = bank * 0x1000 + num * 16;
-    return this.chr.slice(start, start + 16);
+  ppuWrite(address, data) {
+    // mapper 0
+    this.chr[address] = data;
+  }
+  ppuRead(address) {
+    // mapper 0
+    return this.chr[address];
   }
 }
 

@@ -96,10 +96,10 @@ class PPU {
     let bank = (this.control & CR.BACKGROUND_PATTERN_ADDR) >> 4;
     let offset = row * 32 + column;
     let num = this.vram[table][offset];
-    let tile = this.cart.getTile(bank, num);
+    let tileoff = this.getTileOffset(bank, num);
     let finey = y % 8;
-    this.bgLo = tile[finey];
-    this.bgHi = tile[finey + 8];
+    this.bgLo = this.cart.ppuRead(tileoff + finey);
+    this.bgHi = this.cart.ppuRead(tileoff + finey + 8);
 
     let aoffset = Math.floor(row / 4) * 8 + Math.floor(column / 4);
     let attr = this.vram[table][0x3c0 + aoffset];
@@ -236,10 +236,10 @@ class PPU {
               let flipped =
                 (attr & SpriteByteTwo.FLIP_VERTICAL) ==
                 SpriteByteTwo.FLIP_VERTICAL;
-              let tile = null;
+              let tileoff = 0;
               if (size === 8) {
                 let bank = (this.control & CR.SPRITE_PATTERN_ADDR) >> 3;
-                tile = this.cart.getTile(bank, this.sprites[i + 1]);
+                tileoff = this.getTileOffset(bank, this.sprites[i + 1]);
               } else {
                 let bank = this.sprites[i + 1] & SpriteByteOne.BANK;
                 let tilenum = this.sprites[i + 1] & ~SpriteByteOne.BANK;
@@ -249,7 +249,7 @@ class PPU {
                 if (finey > 7) {
                   finey -= 8;
                 }
-                tile = this.cart.getTile(bank, tilenum);
+                tileoff = this.getTileOffset(bank, tilenum);
               }
               if (flipped) {
                 finey = 7 - finey;
@@ -258,8 +258,8 @@ class PPU {
               if (attr & SpriteByteTwo.FLIP_HORIZONTAL) {
                 finex = 7 - finex;
               }
-              let lo = tile[finey] << finex;
-              let hi = tile[finey + 8] << finex;
+              let lo = this.cart.ppuRead(tileoff + finey) << finex;
+              let hi = this.cart.ppuRead(tileoff + finey + 8) << finex;
               // foreground palettes are the last 4
               let start = 0x11 + (this.sprites[i + 2] & 0x03) * 4;
               let fgpal = [
@@ -355,6 +355,10 @@ class PPU {
     this.mirroring = cart.mirroring;
   }
 
+  getTileOffset(bank, num) {
+    return bank * 0x1000 + num * 16;
+  }
+
   showTile(xloc, yloc, bank, num, palette = undefined) {
     if (palette === undefined) {
       palette = [0, 1, 2, 3];
@@ -365,10 +369,10 @@ class PPU {
       this.pal[palette[2]],
       this.pal[palette[3]],
     ];
-    let tile = this.cart.getTile(bank, num);
+    let tileoff = this.getTileOffset(bank, num);
     for (let y = 0; y < 8; y++) {
-      let lo = tile[y];
-      let hi = tile[y + 8];
+      let lo = this.cart.ppuRead(tileoff + y);
+      let hi = this.cart.ppuRead(tileoff + y + 8);
       for (let x = 0; x < 8; x++) {
         // hi bit from msb of second plane
         let value = ((0x80 & hi) >> 6) | ((0x80 & lo) >> 7);
@@ -447,7 +451,7 @@ class PPU {
     if (addr >= 0x0000 && addr <= 0x1fff) {
       // read from chr
       let result = this.buffer;
-      this.buffer = this.cart.chr[addr];
+      this.buffer = this.cart.ppuRead(addr);
       return result;
     } else if (addr >= 0x2000 && addr <= 0x3eff) {
       // read from vram
@@ -481,8 +485,8 @@ class PPU {
     let addr = this.addr;
     this.incAddr();
     if (addr >= 0x0000 && addr <= 0x1fff) {
-      // read from chr
-      this.cart.chr[addr] = data;
+      // write to chr
+      this.cart.ppuWrite(addr, data);
     } else if (addr >= 0x2000 && addr <= 0x3eff) {
       this.writeVram(addr, data);
     } else if (addr >= 0x3f00 && addr <= 0x3fff) {
